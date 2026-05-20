@@ -1,0 +1,302 @@
+---
+title: "02c_DevelopmentBlockIdentification"
+date: "2025-07-24"
+output: html_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = scriptdir)
+```
+
+```{r}
+## setup
+library(sf)
+  CRS <- st_crs(CRS)
+library(dplyr)
+library(tidyr)
+library(purrr)
+```
+#import data
+```{r}
+parcels.path = file.path(resultdata, '00_Harmonisation', '00c_parcels', '00c_parcels.gpkg')
+parcels <- st_read(parcels.path)
+parcels <- st_transform(parcels, CRS)
+
+buildings.path = file.path(resultdata, '00_Harmonisation', '00b_02_buildings', '00b_02_buildings.gpkg')
+buildings <- st_read(buildings.path)
+buildings <- st_transform(buildings, CRS)
+
+streets.path = file.path(resultdata, '00_Harmonisation', '00d_streets', '00d_streetriver.gpkg')
+streets <- st_read(streets.path)
+streets <- st_transform(streets, CRS)
+
+corine.path <- file.path(resultdata, '00_Harmonisation', '00e_corine', '00e_corine.gpkg')
+corine <- st_read(corine.path)
+corine <- st_transform(corine, CRS)
+```
+#data prep corine
+```{r}
+# crop by parcel
+#parcel_buffer <- st_buffer(st_union(parcels), dist = 200)
+#corine <- st_zm(corine, drop = TRUE, what = "ZM")
+#parcel_buffer <- st_zm(parcel_buffer, drop = TRUE, what = "ZM")
+#corine <- st_intersection(corine, parcel_buffer) 
+
+# group corine into urban and non urban groups
+corine <- corine %>%
+  mutate(
+    landclass = case_when(
+      Code_18 >= 111 & Code_18 <= 142 ~ "urban",
+      TRUE ~ "non urban"
+    )
+  )
+corine <- st_zm(corine)
+corine <- corine %>%
+  group_by(landclass) %>%
+  summarise(.groups = "drop")
+corine <- st_make_valid(corine)
+
+
+# crop by AGS_INSEE in parcels and intersect with Corine
+parcels.agsinsee <- parcels %>%
+  group_by(AGS_INSEE) %>%
+  summarise(.groups = "drop")
+parcels.agsinsee <- st_make_valid(parcels.agsinsee)
+
+# assign AGS_INSEE to corine
+corine.intersected <- st_intersection(corine, parcels.agsinsee)
+
+rm(corine, parcels.agsinsee)
+gc()
+
+corine.intersected <- corine.intersected %>%
+  filter(landclass == "urban") %>%
+  select(AGS_INSEE, geom, landclass)
+```
+#overlap analysis parcels buildings and join street names
+```{r}
+intersections <- st_intersection(parcels, buildings %>% filter(area > 20))
+
+intersections$area_overlap <- st_area(intersections)
+
+# Keep parcel_id and street
+intersections <- intersections %>%
+  st_drop_geometry() %>%
+  select(parcel_id, street, area_overlap)
+
+# Optionally: pick the **first street** per parcel (or you can use a better rule)
+intersections <- intersections %>%
+  group_by(parcel_id) %>%
+  summarise(
+    total_overlap = sum(area_overlap),
+    street = first(street)  # or use a majority vote / concatenate
+  )
+
+parcels.buildingpc <- left_join(parcels, intersections, by = "parcel_id")
+
+rm(intersections)
+gc()
+
+parcels.buildingpc$parcel_area <- st_area(parcels.buildingpc)
+parcels.buildingpc <- st_drop_geometry(parcels.buildingpc)
+parcels.buildingpc$building_pc <- (parcels.buildingpc$total_overlap / parcels.buildingpc$parcel_area)
+parcels.buildingpc$building_pc[is.na(parcels.buildingpc$building_pc)] <- 0
+```
+#assign dominant corine to parcel
+```{r message=FALSE}
+# currently: run in QGIS
+
+ags_list <- intersect(unique(parcels$AGS_INSEE), unique(corine.intersected$AGS_INSEE))
+
+# Initialize list to store results
+dominant_results <- list()
+
+# Loop through AGS_INSEE values
+for (ags in ags_list) {
+  # Filter to current municipality
+  p_sub <- parcels %>% filter(AGS_INSEE == ags)
+  c_sub <- corine.intersected %>% filter(AGS_INSEE == ags)
+
+  # Skip if either is empty
+  if (nrow(p_sub) == 0 || nrow(c_sub) == 0) next
+
+  # Intersect and calculate overlap
+  p_c <- st_intersection(p_sub, c_sub)
+  p_c$overlap_area <- st_area(p_c)
+
+p_c <- st_drop_geometry(p_c)
+p_c <- p_c %>%
+  group_by(parcel_id) %>%
+  summarise(
+    urban_area = sum(overlap_area),
+    area = first(area)
+  )
+
+p_c <- p_c %>%
+  mutate(urban_pc = as.numeric(urban_area) / as.numeric(area))
+p_c <- p_c %>%
+  select(parcel_id, urban_pc)
+  
+  # Store result
+  dominant_results[[ags]] <- p_c
+}
+
+results <- bind_rows(dominant_results)
+
+parcels.urbanpc <- parcels %>%
+  left_join(results, by = "parcel_id")
+
+rm(results)  # from dominant_results loop
+gc()
+
+parcels.urbanpc <- parcels.urbanpc %>%
+  mutate(urban_pc = replace_na(urban_pc, 0))
+```
+#join urbanpc and buildingpc and filter
+```{r}
+parcels.joinedurbanbuildingpc <- left_join(
+  parcels.urbanpc,
+  parcels.buildingpc %>% select(parcel_id, building_pc, parcel_area, building_area = total_overlap, street),
+  by = "parcel_id"
+)
+
+rm(parcels.urbanpc, parcels.buildingpc)
+gc()
+
+parcels.joinedurbanbuildingpc <- parcels.joinedurbanbuildingpc %>%
+  filter(
+    !(as.numeric(urban_pc) == 0 & as.numeric(building_pc) == 0) &
+    !(as.numeric(building_pc) < 0.05 & as.numeric(urban_pc) < 0.1)&
+    !(as.numeric(building_pc) == 0 & as.numeric(urban_pc) < 0.4)
+  )
+```
+
+#buffer streets and overlap with parcels
+```{r}
+# Initialize result list
+dominant_results <- list()
+
+# Get unique AGS_INSEE codes
+ags_list <- unique(parcels.joinedurbanbuildingpc$AGS_INSEE)
+
+# Loop through each AGS_INSEE code
+for (ags in ags_list) {
+  
+  # Filter streets and parcels by AGS_INSEE
+  streets_group <- streets %>% filter(AGS_INSEE == ags)
+parcels_group <- parcels.joinedurbanbuildingpc %>%
+  filter(AGS_INSEE == ags) %>%
+  select(parcel_id, AGS_INSEE, parcel_area)
+  
+  # Skip if group is empty or has too few features
+  if (nrow(streets_group) == 0 || nrow(parcels_group) == 0) next
+  
+  # Process
+  df <- streets_group %>%
+    st_buffer(dist = 3) %>%
+    st_union() %>%
+    st_sf()
+
+  intersections <- st_intersection(parcels_group, df)
+  intersections$area_overlap <- st_area(intersections)
+
+  intersections <- intersections %>%
+    st_drop_geometry() %>%
+    group_by(parcel_id) %>%
+    summarise(total_overlap = sum(area_overlap), .groups = "drop")
+
+  # Drop geometry from parcels to speed up
+  parcels_group <- parcels_group %>% st_drop_geometry()
+
+  p_c <- left_join(parcels_group, intersections, by = "parcel_id") %>%
+    mutate(
+      street_pc = as.numeric(total_overlap) / parcel_area,
+      street_pc = ifelse(is.na(street_pc), 0, street_pc)
+    )
+
+  # Save result in list
+  dominant_results[[ags]] <- p_c
+}
+
+# Combine all results into a single data frame
+results <- bind_rows(dominant_results)
+
+parcels.streetpc <- parcels.joinedurbanbuildingpc %>%
+  left_join(
+    results %>% select(parcel_id, street_pc),
+    by = "parcel_id"
+  )
+
+rm(parcels.joinedurbanbuildingpc, results)
+gc()
+
+parcels.streetpc <- parcels.streetpc %>%
+  filter(
+   !(as.numeric(building_pc) < 0.05 & as.numeric(street_pc) > 0.2)    
+)
+```
+
+#filter out extremely narrow parcels 
+```{r}
+parcels.streetpc <- parcels.streetpc %>%
+  mutate(
+    shape_index = as.numeric(parcel_area) / as.numeric(perimeter^2)
+  ) %>%
+ filter(shape_index > 0.005)
+parcels.streetpc <- parcels.streetpc %>% select(-shape_index)
+```
+
+#collapse building islands, exclude unbuilt ones
+```{r}
+parcels_dissolved <- parcels.streetpc %>%
+  st_union()
+
+# Cast back to single parts (split disconnected geometries)
+parcels_singleparts <- st_cast(parcels_dissolved, "POLYGON")
+
+# Turn into an sf object and assign island IDs
+parcels_islands <- st_sf(
+  island_id = seq_len(length(parcels_singleparts)),
+  geometry = parcels_singleparts
+)
+
+intersection_list <- st_intersects(parcels.streetpc, parcels_islands)
+
+parcels.island_id <- parcels.streetpc %>%
+  mutate(island_id = map_int(intersection_list, ~ if(length(.x) > 0) parcels_islands$island_id[.x[1]]))
+
+
+island_building_summary <- parcels.island_id %>%
+  st_drop_geometry() %>%
+  group_by(island_id) %>%
+  summarise(total_building_area = sum(building_area, na.rm = TRUE)) 
+
+island_building_summary <- island_building_summary %>%
+  filter(as.numeric(total_building_area) >= 40)
+
+# Filter original parcels by these island IDs
+parcels.island_id <- parcels.island_id %>%
+  filter(island_id %in% island_building_summary$island_id)
+
+#add function to split into DE and FR
+
+outputDE.path <- file.path(
+  resultdata,
+  child_env$subdir,
+  "02c_01_DevelopmentBlockIdentificationDE.gpkg")
+
+outputFR.path <- file.path(
+  resultdata,
+  child_env$subdir,
+  "02c_01_DevelopmentBlockIdentificationFR.gpkg")
+
+parcels.DE <- parcels.island_id %>%
+  filter(country == de)
+parcels.FR<- parcels.island_id %>%
+  filter(country == fr)
+
+st_write(parcels.DE, outputDE.path)
+st_write(parcels.FR, outputFR.path)
+```
+# from here, we switch to QGIS Model builder

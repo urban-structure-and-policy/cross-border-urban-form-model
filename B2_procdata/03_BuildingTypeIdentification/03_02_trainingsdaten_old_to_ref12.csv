@@ -1,0 +1,18 @@
+original;wohnform;beschreibung;buildingtype;description_original;training_v1;description_v1;training_v2;description_v2
+31;Ein-/Zweifamilienhaus;Freistehendes  Ein- und Zweifamilienhaus;SFH;Detached SFH;31;Detached SFH;31;Detached SFH
+34;Ein-/Zweifamilienhaus;Ein- und Zweifamilienhäuser als Doppelhaus;SFH;Semi-detached SFH;34;Semi-detached SFH;34;Semi-detached SFH
+32;Ein-/Zweifamilienhaus;Ein- und Zweifamilienhäuser als  Reihenhaus;SFH;Terraced SFH;32;Terraced SFH;32;Terraced SFH
+12;Mehrfamilienhaus (offen);Freistehendes Mehrfamilienhaus (straßenbegleitend / in offener Blockrandbebauung);detached MFH;Detached MFH;12;Detached MFH;12;Detached MFH
+23;Mehrfamilienhaus (offen);Freistehendes Mehrfamilienhaus als Punkthochhaus (>22 m);detached MFH;High-rise detached MFH (>22m);13;High-rise detached MFH (>22m);13;High-rise detached MFH (>22m)
+21;Mehrfamilienhaus (in Zeile);Mehrfamilienhaus in traditioneller / teilindustrieller Bauweise (überwiegend Zeilenbauweise);row development;Traditional / semi-industrial row housing;21;Traditional / semi-industrial row housing;21;Traditional / semi-industrial row housing
+22;Mehrfamilienhaus (in Zeile);Mehrfamilienhaus in Plattenbauweise (industrieller Bauweise);row development;Prefabricated row housing;22;Prefabricated row housing;22;Prefabricated row housing
+11;Mehrfamilienhaus (geschlossen);Mehrfamilienhaus (überwiegend in  Blockrandbebauung) über 50m;perimeter block development;Wilhelminian block;23;Wilhelminian block;23;Wilhelminian block
+33;Wohnform nicht eindeutig (Ein-/Zweifamilienhaus oder Mehrfamilienhaus);Mehrfamilienhaus im historischen Ortskern (dörfliche Struktur);undetermined (SFH or MFH);MFH in historic city center;14;MFH in historic city center;33;Rural houses
+36;Ein-/Zweifamilienhaus;Kettenbauweise;SFH;Linked SFH;32;Terraced SFH;36;Linked SFH
+37;drop;Exoten aus Frankreich (Ein- und Zweifamilienhaus);drop;Special buildings in France (SFH);0;0;37;Special buildings in France (SFH)
+41;Nichtwohnnutzung;Industrie / Gewerbe;non-residential;Industrial and commercial buildings;41;Industrial and commercial buildings;41;Industrial and commercial buildings
+42;Nichtwohnnutzung;Besondere funktionale Prägung;non-residential;Special usage buildings;1;Public buildings;1;Public buildings
+66;Nichtwohnnutzung;Nebengebäude;non-residential;Auxiliary buildings;99;Auxiliary buildings;99;Auxiliary buildings
+99;Nichtwohnnutzung;Nebengebäude;non-residential;Auxiliary buildings;0;0;99;Auxiliary buildings
+77;drop;Mischnutzung;drop;Mixed use;0;0;0;0
+0;drop;unklar;drop;Unclear;0;0;0;0

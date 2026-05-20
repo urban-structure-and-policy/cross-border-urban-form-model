@@ -1,0 +1,144 @@
+---
+title: "join_description_to_training_data"
+output: html_document
+---
+
+```{r, include=FALSE}
+#  setup
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = scriptdir)
+```
+
+```{r, include=FALSE, echo =FALSE}
+### Pakete
+library(sf)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+```
+
+## New building geometries
+
+The training data used for building type classification is a dataset grown over time in different research projects. They were using different building geometries as base data and different building type classification systems. Hence, this script cleans the existing training data set, makes geometries and the classification system uniform and creates a sample dataset which is equally distributed over regions and building types. 
+The new types and descriptions are added as defined in trainingsdaten_old_to_ref12.csv. They are based on the classification by Hecht(2014).
+As the classification system has changed during the working process and similar codes being used in different systems can lead to confusion, a version number is kept within trainingsdaten_old_to_ref12.csv and in the new training dataset to be able to trace which description corresponds to the respective types used.
+
+```{r}
+# definitions
+
+traincol_original <- "original"
+v <- 'v2'
+traincol <- paste0("training_", v)
+descrcol <- paste0("description_", v)
+```
+
+
+```{r}
+# load-data / path definition
+building_geom <- read_sf(file.path(resultdata, '00_Harmonisation', '00b_02_buildings', '00b_02_buildings.gpkg'))
+training_data_path <- file.path(procdata, child_env$subdir, '03_02_trainingdata.gpkg')
+old_to_ref12_path <- file.path(procdata, child_env$subdir, '03_02_trainingsdaten_old_to_ref12.csv')
+btypes_outpath <- file.path(procdata, child_env$subdir, '03_02_buildingtypes.csv')
+
+# rename current _all layer to _old -> all will be updated in this script
+copy_layer = function(dsn, layer, name.new){   
+  v.lyr = st_read(dsn, layer) 
+  st_write(v.lyr, dsn, name.new, append = FALSE) 
+  return(v.lyr)}
+
+training_data_old = copy_layer(training_data_path, "buildings_training_data_all","buildings_training_data_old") %>%
+  rename(training = !!sym(traincol_original))
+```
+
+
+```{r}
+# Map training data to new building geometries
+training_data_join <- st_join(training_data_old[c("geom", "training")], building_geom[c("geom", "building_id")], join = st_intersects, largest = TRUE) %>% st_drop_geometry()
+training_data <- inner_join(building_geom, training_data_join[c("building_id", "training")], by = "building_id")
+```
+
+
+```{r}
+# new-types
+# Prepare type table
+old_to_ref12 <- read.csv2(old_to_ref12_path, fileEncoding = "latin1")
+types <- old_to_ref12[c(traincol, descrcol)] %>%
+  filter(.data[[traincol]] != 0) %>%  # remove entries to drop
+  distinct()  # keep only one entry of duplicates
+types$bldgtype <- paste(types[[traincol]], types[[descrcol]], sep = ' - ')
+
+# Export new table to be used as building type reference table
+write.csv(types, btypes_outpath)
+
+# Join new types and descriptions to new geometries
+training_data <- training_data %>%
+  left_join(old_to_ref12[c("original", traincol, descrcol)], by = c("training" = "original")) %>%  # join corresponding REF12 type
+  filter(get(traincol) != 0) %>%  # remove types to be dropped (specified with 0 in table) 
+  filter(get(traincol) != 37) %>% # remove additional types to drop if necessary
+  rename(c(original = training)) %>%  # rename columns
+  distinct() # remove duplicates with all columns the same
+
+# Check for duplicates with different values in columns
+duplicates <- training_data[duplicated(training_data$building_id) | duplicated(training_data$building_id, fromLast = TRUE), ]
+
+# Remove auxiliary buildings for same id, different type (decide based on reviewing duplicates df)
+drop_duplicate_type = 99
+if (length(duplicates) > 0) {
+  training_data <- training_data %>%
+    group_by(building_id) %>%
+    filter(!(get(traincol) == drop_duplicate_type & n() > 1)) %>%         
+    ungroup()}
+
+# Check duplicates again, if all cases have been solved
+duplicates <- training_data[duplicated(training_data$building_id) | duplicated(training_data$building_id, fromLast = TRUE), ]
+
+# If not, decide which ones to remove and run command above with changed drop_duplicate_type or remove all remaining:
+if (length(duplicates) > 0) {
+  training_data <- training_data %>%
+    filter(!building_id %in% duplicates$building_id)}
+
+# save transformed training data
+message1 <- capture.output(st_write(training_data, training_data_path, layer = "buildings_training_data_all", append = FALSE))
+
+```
+
+
+```{r}
+# Create a subset with 100 buildings per building type from the training data for each region
+subset100 <- function(regionstr, samplesize) {
+  set.seed(161)
+  result <- training_data %>%
+    filter(startsWith(region, regionstr)) %>%
+    group_by(.data[[traincol]]) %>%
+    slice_sample(n = samplesize) %>%
+    ungroup()
+  
+  return(result)
+}
+
+fr100 <- subset100("fr", 150)
+bw100 <- subset100("bw", 150)
+rp100 <- subset100("rp", 150)
+
+# Join together for the _equal layer
+training_equal <- rbind(fr100, bw100, rp100)
+
+# Export combined subsets
+message2 <- capture.output(st_write(training_equal, training_data_path, layer = "buildings_training_data_equal", append = FALSE))
+```
+
+
+```{r}
+training_equal %>% 
+  filter(!is.na(get(traincol))) %>% 
+  ggplot(aes(y = height)) +
+  geom_boxplot()+
+  facet_wrap(~get(traincol), nrow = 1)
+```
+
+
+```{r}
+# free memory
+remove(training_data, training_data_join, training_data_old, building_geom)
+gc()
+```

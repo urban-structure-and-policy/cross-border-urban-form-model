@@ -1,0 +1,11 @@
+ORIG_FKT;FNC_CODE;IS_RES
+Agricole;1;0
+Annexe;2;0
+Commercial et services;3;0
+Fonction mixte avec usage résidentiel;4;2
+Fonction mixte non résidentiel;5;0
+Indifférencié;6;0
+Industriel;7;0
+Religieux;8;0
+Résidentiel;9;1
+Sportif;10;0

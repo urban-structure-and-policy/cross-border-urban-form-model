@@ -1,0 +1,482 @@
+---
+title: "Test GHS Age extraction functions"
+output: html_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = scriptdir)
+```
+
+```{r}
+library(sf)
+library(dplyr)
+library(terra)
+library(ModelMetrics)
+library(stringr)
+library(purrr)
+library(writexl)
+```
+
+# 1. Data
+
+```{r}
+
+## new inputs -------------------------
+
+# GHS raster
+ghs.pth = file.path(basedata, 'EU', 'GHSL', 'GHS_AGE_GLOBE_R2025A_54009_V1_0', 'GHS_AGE_1975052020_GLOBE_R2025A_54009_100_V1_0.tif')
+ghs.raw <- rast(ghs.pth)
+names(ghs.raw) <- "ghs_age"
+ghs.raw
+
+
+## outputs from previous steps --------
+
+# Blocks (output from 02)
+bks.pth = file.path(resultdata, '02c_DevelopmentBlockIdentification', '02c_03_DevelopmentBlocks.gpkg')
+bks0 <- st_read(bks.pth) 
+bks0
+
+# communities (output from 01)
+com.pth <- file.path(resultdata, '01_AreaDefinition', "01b_communities.gpkg")
+com <- st_read(com.pth)
+com <- st_buffer(com, dist = 5000) # buffer to make sure the GHS is covered enough.
+
+# buildings 
+bld.pth <- file.path(resultdata, '03_BuildingTypeIdentification', '03_03_buildingtypes.gpkg')
+bld0 <- st_read(bld.pth)
+bld0 <- bld0 %>%
+  select(country, area, height, volume, building_id, block_id)
+
+
+## provided in process data -----------
+
+# GHS age values (table in process data)
+ghs.dcr.pth <- file.path(procdata, child_env$subdir, "04_ghs_age", "ghs_age.txt")
+ghs.dcr <- read.csv(
+  ghs.dcr.pth,
+  col.names = c("val", "R", "G", "B", "A", "description")) %>%
+  mutate(
+    year = ifelse(val == 0, NA_integer_,
+                  as.integer(str_extract(description, "\\d{4}$")))) %>%
+  select(val, description, year)
+
+# training / test data
+test.pth <- file.path(procdata, child_env$subdir, "04_validation", "04_DevBlocks_validation.gpkg")
+test <- st_read(test.pth) %>% st_drop_geometry()
+
+test <- bks0 %>%
+  left_join(test %>% select(block_id, year), by = "block_id") %>%
+  filter(!is.na(year), year != 2025) %>%
+  distinct()  # drops duplicate rows
+
+```
+
+```{r}
+# prepare raster data
+
+# get communities extent and reproject to raster crs
+com.e <- ext(com) %>% project(com, ghs.raw)
+
+# crop and reproject raster to communities crs
+ghs.r <- ghs.raw %>%  # global raster
+  crop(com.e) %>%       # crop to area of interest
+  project(crs(com), method = "near")   # reproject
+
+writeRaster(ghs.r, file.path(procdata, child_env$subdir, "04_ghs_age", "ghs_age.tif"), overwrite = TRUE)
+
+# raster values to years
+ghs.r.y <- ghs.r
+values(ghs.r.y) <- sapply(values(ghs.r.y), function(x) {
+  matched_year <- ghs.dcr$year[ghs.dcr$val == x]
+  if (length(matched_year) == 1) {
+    return(matched_year)  # Return the year if a match is found
+  } else {
+    return(NA)  # Return NA if no match is found
+  }
+})
+
+unique(values(ghs.r.y))
+```
+
+```{r}
+# data prep, only use the test data
+
+bks <- bks0 %>%
+  filter(block_id %in% unique(test$block_id))
+bld <- bld0 %>%
+  filter(block_id %in% unique(test$block_id))
+```
+
+```{r}
+# define different functions to extract weights
+
+# mean year weighted by overlap
+extract_wmean <- function(rastlayer, vectlayer){
+  extracted <- terra::extract(rastlayer, vect(vectlayer), exact = TRUE, bind = TRUE, fun = mean) %>% 
+    data.frame() %>%
+    mutate(ghs_age = ceiling(ghs_age / 5) * 5)  # round to next highest step
+  return(extracted)
+} 
+
+# overlap weighted max
+extract_wmax <- function(rastlayer, vectlayer){
+  extracted <- terra::extract(rastlayer, vect(vectlayer), exact = TRUE, bind = TRUE, fun = max) %>%
+    data.frame()
+  return(extracted)
+} 
+
+# simple max -> newest buildings
+extract_max <- function(rastlayer, vectlayer){
+  extracted <- terra::extract(rastlayer, vect(vectlayer), bind = TRUE, fun = max) %>%
+    data.frame()
+  return(extracted)
+} 
+
+# year with largest overlap (newer if ties between overlap fraction)
+extract_ovlap <- function(rastlayer, vectlayer, id_col){
+  extracted <- terra::extract(rastlayer, vect(vectlayer), exact = TRUE) %>%
+    data.frame() %>%
+    mutate(!!id_col := vectlayer[[id_col]][ID]) %>% 
+    group_by(across(all_of(c(id_col, "ghs_age")))) %>%    # groups by year and block id for blocks that overlap several pixels with the same year
+    summarise(fraction= sum(fraction), .groups = "drop") %>%
+    #ungroup() %>%
+    slice_max(by = all_of(id_col), order_by = fraction, with_ties = TRUE) %>%
+    slice_max(by = all_of(id_col), order_by = ghs_age, with_ties = FALSE)
+  return(extracted)
+}
+```
+
+```{r}
+## BLOCKS
+# extract weights using different functions 
+bks.wmean <- extract_wmean(ghs.r.y, bks)
+bks.wmax <- extract_wmax(ghs.r.y, bks)
+bks.max <- extract_max(ghs.r.y, bks)
+bks.ovlap <- extract_ovlap(ghs.r.y, bks, "block_id")
+
+# join all dfs together
+bks.years <- bks %>%
+  left_join(test %>% st_drop_geometry() %>% select(block_id, year), by = "block_id") %>%
+  left_join(bks.wmean %>% select(block_id, ghs_age) %>% rename(wmean = ghs_age)) %>%
+  left_join(bks.wmax %>% select(block_id, ghs_age) %>% rename(wmax = ghs_age)) %>%
+  left_join(bks.max %>% select(block_id, ghs_age) %>% rename(max = ghs_age)) %>%
+  left_join(bks.ovlap %>% select(block_id, ghs_age) %>% rename(ovlap = ghs_age))
+```
+
+```{r}
+## BUILDINGS
+# assign years to buildings to weight by building volume and area 
+bld.wmean <- extract_wmean(ghs.r.y, bld) %>% st_drop_geometry()
+bld.wmax <- extract_wmax(ghs.r.y, bld)%>% st_drop_geometry()
+bld.max <- extract_max(ghs.r.y, bld) %>% st_drop_geometry()
+
+bld.ovlap <- extract_ovlap(ghs.r.y, bld, "building_id") %>%
+  left_join(
+    bld.wmax %>% select(building_id, block_id, volume,area),
+    by = "building_id"
+  )
+```
+
+
+```{r}
+# get dominant age on block_id by building volume
+get_dominant_age_byvol <- function(df, label) {
+  df %>%
+    group_by(block_id, ghs_age) %>%
+    summarise(volume = sum(volume), .groups = "drop") %>%
+    group_by(block_id) %>%
+    slice_max(order_by = volume, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(block_id, ghs_age) %>%
+    rename(!!label := ghs_age)
+}
+
+# or by area
+get_dominant_age_byarea <- function(df, label) {
+  df %>%
+    group_by(block_id, ghs_age) %>%
+    summarise(area = sum(area), .groups = "drop") %>%
+    group_by(block_id) %>%
+    slice_max(order_by = area, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(block_id, ghs_age) %>%
+    rename(!!label := ghs_age)
+}
+
+dfs <- c("max", "wmax", "wmean", "ovlap")
+
+results.vol <- list()  # To store outputs
+for (name in dfs) {
+  df_name <- paste0("bld.", name)
+  df <- get(df_name)
+
+  # Check for block_id before running the function
+  if (!"block_id" %in% colnames(df)) {
+    warning(paste(df_name, "is missing 'block_id'. Skipping."))
+    next
+  }
+
+  results.vol[[name]] <- get_dominant_age_byvol(df, name)
+}
+
+results.area <- list()  # To store outputs
+for (name in dfs) {
+  df_name <- paste0("bld.", name)
+  df <- get(df_name)
+
+  # Check for block_id before running the function
+  if (!"block_id" %in% colnames(df)) {
+    warning(paste(df_name, "is missing 'block_id'. Skipping."))
+    next
+  }
+
+  results.area[[name]] <- get_dominant_age_byarea(df, name)
+}
+
+results.area.tibble <- imap(results.area, function(tbl, name) {
+  col_to_rename <- setdiff(names(tbl), "block_id")
+
+  if (length(col_to_rename) != 1) {
+    warning(paste("Skipping", name, "- expected exactly one non-block_id column, found:", length(col_to_rename)))
+    return(tbl)
+  }
+
+  rename(tbl, !!paste0(name, ".area") := all_of(col_to_rename))
+})
+
+results.vol <- reduce(results.vol, left_join, by = "block_id")
+results.vol <- results.vol %>%
+  rename_with(
+    ~ paste0(., ".volume"),
+    .cols = -block_id
+  )
+
+results.area <- reduce(results.area, left_join, by = "block_id")
+results.area <- results.area %>%
+  rename_with(
+    ~ paste0(., ".area"),
+    .cols = -block_id
+  )
+
+bks.years <- bks.years %>%
+  left_join(results.area, by = "block_id") %>%
+  left_join(results.vol, by = "block_id")
+
+```
+
+```{r}
+# Replace values <= 1990 with 1990
+bks.years <- bks.years %>%
+  filter(if_any(c(wmean, wmax, max, ovlap), ~ !is.na(.))) %>%
+  mutate(
+    wmean = ifelse(wmean <= 1990, 1990, wmean),
+    wmax  = ifelse(wmax  <= 1990, 1990, wmax),
+    max  = ifelse(max  <= 1990, 1990, max),
+    ovlap = ifelse(ovlap <= 1990, 1990, ovlap)
+  )
+
+bks.years <- bks.years %>%
+  filter(if_all(ends_with(c(".volume", ".area")), ~ !is.na(.))) %>%
+  mutate(across(
+    ends_with(c(".volume", ".area")),
+    ~ ifelse(. <= 1990, 1990, .)
+  ))
+```
+
+```{r}
+tolerance_confusion_matrix2 <- function(truth, prediction, tolerance = 5) {
+  # Create a full table of truth vs prediction
+  raw_cm <- table(Truth = truth, Prediction = prediction)
+  
+  # Get original row/column names before relabeling
+  truth_labels <- as.character(rownames(raw_cm))
+  pred_labels <- as.character(colnames(raw_cm))
+  
+  # Count features per truth label
+  truth_counts <- rowSums(raw_cm)
+  
+  # Rename truth labels to include counts (n=)
+  rownames(raw_cm) <- paste0(truth_labels, " (n=", truth_counts, ")")
+  
+  # Convert to matrix for processing
+  cm_matrix <- as.matrix(raw_cm)
+  
+  # Calculate acceptable predictions within tolerance
+  acceptable <- outer(
+    as.numeric(truth_labels),
+    as.numeric(pred_labels),
+    function(x, y) abs(x - y) <= tolerance
+  )
+  
+  acceptable_cm <- cm_matrix
+  acceptable_cm[!acceptable] <- 0
+  
+  # Compute global stats
+  correct <- sum(acceptable_cm)
+  total <- sum(cm_matrix)
+  accuracy <- correct / total
+  
+  # Compute per-truth accuracy (row-wise %)
+  row_correct <- rowSums(acceptable_cm)
+  row_total <- rowSums(cm_matrix)
+  row_percent <- round(100 * row_correct / row_total, 1)
+  
+  # Append per-row % to rownames of tolerance matrix
+  rownames(acceptable_cm) <- paste0(
+    rownames(acceptable_cm),
+    " | ", row_percent, "%"
+  )
+  
+  list(
+    tolerance_matrix = acceptable_cm,
+    full_matrix = cm_matrix,
+    accuracy_within_tolerance = accuracy,
+    per_class_accuracy_percent = setNames(row_percent, truth_labels)
+  )
+}
+
+bks.test <- bks.years %>%
+  st_drop_geometry()
+
+vars_to_check <- c("max", "wmean", "wmax", "ovlap", "ovlap.volume", "max.volume", "wmean.volume", "wmax.volume", "ovlap.area", "max.area", "wmean.area", "wmax.area")
+
+test.values <- bks.test %>%
+  filter(!is.na(year)) %>%
+  filter(if_all(all_of(vars_to_check), ~ !is.na(.)))
+
+  
+results <- list()
+
+
+for (var in vars_to_check) {
+  res <- tolerance_confusion_matrix2(
+    truth = test.values$year,
+    prediction = test.values[[var]],
+    tolerance = 5
+  )
+  results[[var]] <- res
+}
+print(results)
+```
+
+
+```{r}
+# Export full confusion matrix of Validation Results
+results.path = file.path(resultdata, child_env$subdir,'ValidationResults.rds')
+
+saveRDS(results, results.path)
+
+# export as xlsx 
+tolerance_export.path = file.path(resultdata, child_env$subdir,'ValidationResults.xlsx')
+# Prepare a flat named list of data frames
+tolerance_export <- lapply(names(results), function(name) {
+  as.data.frame(results[[name]]$tolerance_matrix)
+})
+names(tolerance_export) <- paste0(names(results), "_tolerance")
+
+# Write to Excel
+write_xlsx(tolerance_export, tolerance_export.path)
+```
+
+```{r}
+# Select best approach for application on complete dataset 
+
+# Initialize message
+message1 <- ""
+
+# Check if child_env$approach exists in the list of approaches
+approaches_list <- names(results)
+
+valid_approach <- exists("approach", envir = child_env) &&
+                  !is.null(child_env$approach) &&
+                  !is.na(child_env$approach) &&
+                  child_env$approach %in% approaches_list
+
+if (valid_approach) {
+  
+  approach <- child_env$approach
+  message1 <- paste0(message1, "Using defined approach ...\n")
+  
+} else {
+  
+  message1 <- paste0(
+    message1,
+    "No valid approach given. Assigning the best approach based on accuracy...\n"
+  )
+  
+  # Compute accuracies once (avoid repetition)
+  accuracies <- sapply(results, function(x) x$accuracy_within_tolerance)
+  
+  max_accuracy <- max(accuracies)
+  tied_approaches <- names(accuracies)[accuracies == max_accuracy]
+  
+  # Choose first if tie
+  approach <- tied_approaches[1]
+}
+
+message1 <- paste0(message1, "> The selected approach is: ", approach, "\n")
+
+cat(message1)
+
+```
+
+```{r}
+# Now, based on the selected approach, apply the respective function
+
+# get method and metric
+method <- str_extract(approach, "^[^.]+")  # get first part of approach
+metric <- str_extract(approach, "(?<=\\.).+$")  # get second part of approach
+
+if (!is.na(metric)) {
+  polylayer <- bld0
+  
+  extracted <- switch(
+    method,
+    wmax  = extract_wmax(ghs.r.y, polylayer),
+    wmean = extract_wmean(ghs.r.y, polylayer),
+    max   = extract_max(ghs.r.y, polylayer),
+    ovlap = extract_ovlap(ghs.r.y, polylayer, "building_id"),
+    stop("Selected method is not valid.")
+  )
+  
+  extracted.export <- if (metric == "volume") {
+    get_dominant_age_byvol(extracted)
+  } else if (metric == "area") {
+    get_dominant_age_byarea(extracted)
+  }
+  
+} else {
+  polylayer <- bks0
+  
+  extracted <- switch(
+    method,
+    wmax  = extract_wmax(ghs.r.y, polylayer),
+    wmean = extract_wmean(ghs.r.y, polylayer),
+    max   = extract_max(ghs.r.y, polylayer),
+    ovlap = extract_ovlap(ghs.r.y, polylayer, "block_id"),
+    stop("Selected method is not valid.")
+  )
+  
+  extracted.export <- extracted
+}
+
+
+bks.export <- bks0 %>%
+  left_join(
+    extracted.export %>% select(block_id, year = ghs_age),
+    by = "block_id")
+```
+
+
+```{r}
+# export best approach 
+bks.export.path <- file.path(resultdata, child_env$subdir, "04_blockage.gpkg")
+
+message2 <- capture.output(st_write(bks.export, bks.export.path, append = FALSE))
+```
+
+```{r}
+rm(bks,bks0,bks.export,bks.max,bks.ovlap,bks.test,bks.wmax,bks.wmean,bks.years,bld,bld0,bld.max,bld.ovlap,bld.wmax,bld.wmean,com,com.e,df, extracted, extracted.export, ghs.dcr,ghs.r,ghs.r.y,ghs.raw,intersections,overlap_filtered,polylayer,res,results.area,results.area.tibble,results.vol,test,test.values,tolerance_export, training)
+```

@@ -1,0 +1,49 @@
+---
+title: "Join Building type with largest volume to development blocks"
+date: "2025-04-22"
+output: html_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = scriptdir)
+```
+
+```{r, include=FALSE, echo =FALSE}
+### Pakete
+library(sf)
+library(dplyr)
+```
+
+```{r}
+buildings_raw <- read_sf(file.path(resultdata, child_env$subdir, "03_03_buildingtypes.gpkg")) %>% st_drop_geometry()
+blocks <- read_sf(file.path(resultdata, '02c_DevelopmentBlockIdentification', '02c_03_DevelopmentBlocks.gpkg'))
+```
+
+
+```{r}
+# group buildings by blocks and choose type with largest volume 
+
+buildings_group <- buildings %>%
+  group_by(block_id, building_type) %>%
+  summarise(type_volume = sum(volume, na.rm = TRUE), bldgtype = first(bldgtype), .groups = 'drop') %>%
+  group_by(block_id) %>%
+  slice_max(type_volume) %>%
+  ungroup()
+
+head(buildings_group)
+```
+
+```{r}
+blocks_type <- blocks %>%
+  left_join(buildings_group, by = join_by(block_id)) %>% select(-type_volume)
+
+blocks_type_out <- file.path(resultdata, child_env$subdir, "03_04_devblocks_buildingtypes.gpkg")
+write_sf(blocks_type, blocks_type_out)
+```
+
+```{r}
+# free memory
+rm(buildings_raw, blocks, buildings_group, blocks_type)
+gc()
+```

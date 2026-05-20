@@ -1,0 +1,302 @@
+bldg_function;function_name;building_function
+31001_1000;Wohngebäude;Résidentiel
+31001_1010;Wohnhaus;Résidentiel
+31001_1020;Wohnheim;Résidentiel
+31001_1021;Kinderheim;Résidentiel
+31001_1022;Seniorenheim;Résidentiel
+31001_1023;Schwesternwohnheim;Résidentiel
+31001_1024;Studenten-, Schülerwohnheim;Résidentiel
+31001_1025;Schullandheim;Commercial et services
+31001_1100;Gemischt genutztes Gebäude mit Wohnen;Fonction mixte avec usage résidentiel
+31001_1110;Wohngebäude mit Gemeinbedarf;Fonction mixte avec usage résidentiel
+31001_1120;Wohngebäude mit Handel und Dienstleistungen;Fonction mixte avec usage résidentiel
+31001_1121;Wohn- und Verwaltungsgebäude;Fonction mixte avec usage résidentiel
+31001_1122;Wohn- und Bürogebäude;Fonction mixte avec usage résidentiel
+31001_1123;Wohn- und Geschäftsgebäude;Fonction mixte avec usage résidentiel
+31001_1130;Wohngebäude mit Gewerbe und Industrie;Fonction mixte avec usage résidentiel
+31001_1131;Wohn- und Betriebsgebäude;Fonction mixte avec usage résidentiel
+31001_1210;Land- und forstwirtschaftliches Wohngebäude;Fonction mixte avec usage résidentiel
+31001_1220;Land- und forstwirtschaftliches Wohn- und Betriebsgebäude;Fonction mixte avec usage résidentiel
+31001_1221;Bauernhaus;Résidentiel
+31001_1222;Wohn- und Wirtschaftsgebäude;Fonction mixte avec usage résidentiel
+31001_1223;Forsthaus;Résidentiel
+31001_1310;Gebäude zur Freizeitgestaltung;Résidentiel
+31001_1311;Ferienhaus;Résidentiel
+31001_1312;Wochenendhaus;Résidentiel
+31001_1313;Gartenhaus;Annexe
+31001_2000;Gebäude für Wirtschaft oder Gewerbe;Commercial et services
+31001_2010;Gebäude für Handel und Dienstleistungen;Commercial et services
+31001_2020;Bürogebäude;Commercial et services
+31001_2030;Kreditinstitut;Commercial et services
+31001_2040;Versicherung;Commercial et services
+31001_2050;Geschäftsgebäude;Commercial et services
+31001_2051;Kaufhaus;Commercial et services
+31001_2052;Einkaufszentrum;Commercial et services
+31001_2053;Markthalle;Commercial et services
+31001_2054;Laden;Commercial et services
+31001_2055;Kiosk;Commercial et services
+31001_2056;Apotheke;Commercial et services
+31001_2060;Messehalle;Commercial et services
+31001_2070;Gebäude für Beherbergung;Commercial et services
+31001_2071;Hotel, Motel, Pension;Commercial et services
+31001_2072;Jugendherberge;Commercial et services
+31001_2073;Hütte (mit Übernachtungsmöglichkeit);Commercial et services
+31001_2074;Campingplatzgebäude;Commercial et services
+31001_2080;Gebäude für Bewirtung;Commercial et services
+31001_2081;Gaststätte, Restaurant;Commercial et services
+31001_2082;Hütte (ohne Übernachtungsmöglichkeit);Commercial et services
+31001_2083;Kantine;Commercial et services
+31001_2090;Freizeit- und Vergnügungsstätte;Commercial et services
+31001_2091;Festsaal;Commercial et services
+31001_2092;Kino;Commercial et services
+31001_2093;Kegel-, Bowlinghalle;Commercial et services
+31001_2094;Spielkasino;Commercial et services
+31001_2095;Spielhalle;Commercial et services
+31001_2100;Gebäude für Gewerbe und Industrie;Industriel
+31001_2110;Produktionsgebäude;Industriel
+31001_2111;Fabrik;Industriel
+31001_2112;Betriebsgebäude;Industriel
+31001_2113;Brauerei;Industriel
+31001_2114;Brennerei;Industriel
+31001_2120;Werkstatt;Industriel
+31001_2121;Sägewerk;Industriel
+31001_2130;Tankstelle;Industriel
+31001_2131;Waschstraße, Waschanlage, Waschhalle;Industriel
+31001_2140;Gebäude für Vorratshaltung;Industriel
+31001_2141;Kühlhaus;Industriel
+31001_2142;Speichergebäude;Industriel
+31001_2143;Lagerhalle, Lagerschuppen, Lagerhaus;Industriel
+31001_2150;Speditionsgebäude;Industriel
+31001_2160;Gebäude für Forschungszwecke;Industriel
+31001_2170;Gebäude für Grundstoffgewinnung;Industriel
+31001_2171;Bergwerk;Industriel
+31001_2172;Saline;Industriel
+31001_2180;Gebäude für betriebliche Sozialeinrichtung;Industriel
+31001_2200;Sonstiges Gebäude für Gewerbe und Industrie;Industriel
+31001_2210;Mühle;Indifférencié
+31001_2211;Windmühle;Indifférencié
+31001_2212;Wassermühle;Indifférencié
+31001_2213;Schöpfwerk;Indifférencié
+31001_2220;Wetterstation;Indifférencié
+31001_2310;Gebäude für Handel und Dienstleistung mit Wohnen;Fonction mixte avec usage résidentiel
+31001_2320;Gebäude für Gewerbe und Industrie mit Wohnen;Fonction mixte avec usage résidentiel
+31001_2400;Betriebsgebäude zu Verkehrsanlagen (allgemein);Indifférencié
+31001_2410;Betriebsgebäude für Straßenverkehr;Indifférencié
+31001_2411;Straßenmeisterei;Indifférencié
+31001_2412;Wartehalle;Indifférencié
+31001_2420;Betriebsgebäude für Schienenverkehr;Indifférencié
+31001_2421;Bahnwärterhaus;Indifférencié
+31001_2422;Lokschuppen, Wagenhalle;Indifférencié
+31001_2423;Stellwerk, Blockstelle;Indifférencié
+31001_2424;Betriebsgebäude des Güterbahnhofs;Indifférencié
+31001_2430;Betriebsgebäude für Flugverkehr;Indifférencié
+31001_2431;Flugzeughalle;Indifférencié
+31001_2440;Betriebsgebäude für Schiffsverkehr;Indifférencié
+31001_2441;Werft (Halle);Indifférencié
+31001_2442;Dock (Halle);Indifférencié
+31001_2443;Betriebsgebäude zur Schleuse;Indifférencié
+31001_2444;Bootshaus;Indifférencié
+31001_2450;Betriebsgebäude zur Seilbahn;Indifférencié
+31001_2451;Spannwerk zur Drahtseilbahn;Indifférencié
+31001_2460;Gebäude zum Parken;Indifférencié
+31001_2461;Parkhaus;Indifférencié
+31001_2462;Parkdeck;Indifférencié
+31001_2463;Garage;Annexe
+31001_2464;Fahrzeughalle;Indifférencié
+31001_2500;Gebäude zur Versorgung;Indifférencié
+31001_2501;Gebäude zur Energieversorgung;Indifférencié
+31001_2510;Gebäude zur Wasserversorgung;Indifférencié
+31001_2511;Wasserwerk;Indifférencié
+31001_2512;Pumpstation;Indifférencié
+31001_2513;Wasserbehälter;Indifférencié
+31001_2520;Gebäude zur Elektrizitätsversorgung;Indifférencié
+31001_2521;Elektrizitätswerk;Indifférencié
+31001_2522;Umspannwerk;Indifférencié
+31001_2523;Umformer;Indifférencié
+31001_2527;Reaktorgebäude;Indifférencié
+31001_2528;Turbinenhaus;Indifférencié
+31001_2529;Kesselhaus;Indifférencié
+31001_2540;Gebäude für Fernmeldewesen;Indifférencié
+31001_2560;Gebäude an unterirdischen Leitungen;Indifférencié
+31001_2570;Gebäude zur Gasversorgung;Indifférencié
+31001_2571;Gaswerk;Indifférencié
+31001_2580;Heizwerk;Indifférencié
+31001_2590;Gebäude zur Versorgungsanlage;Indifférencié
+31001_2591;Pumpwerk (nicht für Wasserversorgung);Indifférencié
+31001_2600;Gebäude zur Entsorgung;Indifférencié
+31001_2610;Gebäude zur Abwasserbeseitigung;Indifférencié
+31001_2611;Gebäude der Kläranlage;Indifférencié
+31001_2612;Toilette;Indifférencié
+31001_2620;Gebäude zur Abfallbehandlung;Indifférencié
+31001_2621;Müllbunker;Indifférencié
+31001_2622;Gebäude zur Müllverbrennung;Indifférencié
+31001_2623;Gebäude der Abfalldeponie;Indifférencié
+31001_2700;Gebäude für Land- und Forstwirtschaft;Agricole
+31001_2720;Land- und forstwirtschaftliches Betriebsgebäude;Agricole
+31001_2721;Scheune;Agricole
+31001_2723;Schuppen;Annexe
+31001_2724;Stall;Agricole
+31001_2726;Scheune und Stall;Agricole
+31001_2727;Stall für Tiergroßhaltung;Agricole
+31001_2728;Reithalle;Agricole
+31001_2729;Wirtschaftsgebäude;Agricole
+31001_2732;Almhütte;Agricole
+31001_2735;Jagdhaus, Jagdhütte;Agricole
+31001_2740;Treibhaus, Gewächshaus;Agricole
+31001_2741;Treibhaus;Agricole
+31001_2742;Gewächshaus, verschiebbar;Agricole
+31001_3000;Gebäude für öffentliche Zwecke;Commercial et services
+31001_3010;Verwaltungsgebäude;Commercial et services
+31001_3011;Parlament;Commercial et services
+31001_3012;Rathaus;Commercial et services
+31001_3013;Post;Commercial et services
+31001_3014;Zollamt;Commercial et services
+31001_3015;Gericht;Commercial et services
+31001_3016;Botschaft, Konsulat;Commercial et services
+31001_3017;Kreisverwaltung;Commercial et services
+31001_3018;Bezirksregierung;Commercial et services
+31001_3019;Finanzamt;Commercial et services
+31001_3020;Gebäude für Bildung und Forschung;Commercial et services
+31001_3021;Allgemein bildende Schule;Commercial et services
+31001_3022;Berufsbildende Schule;Commercial et services
+31001_3023;Hochschulgebäude (Fachhochschule, Universität);Commercial et services
+31001_3024;Forschungsinstitut;Commercial et services
+31001_3030;Gebäude für kulturelle Zwecke;Commercial et services
+31001_3031;Schloss;Commercial et services
+31001_3032;Theater, Oper;Commercial et services
+31001_3033;Konzertgebäude;Commercial et services
+31001_3034;Museum;Commercial et services
+31001_3035;Rundfunk, Fernsehen;Commercial et services
+31001_3036;Veranstaltungsgebäude;Commercial et services
+31001_3037;Bibliothek, Bücherei;Commercial et services
+31001_3038;Burg, Festung;Commercial et services
+31001_3040;Gebäude für religiöse Zwecke;Religieux
+31001_3041;Kirche;Religieux
+31001_3042;Synagoge;Religieux
+31001_3043;Kapelle;Religieux
+31001_3044;Gemeindehaus;Religieux
+31001_3045;Gotteshaus;Religieux
+31001_3046;Moschee;Religieux
+31001_3047;Tempel;Religieux
+31001_3048;Kloster;Religieux
+31001_3050;Gebäude für Gesundheitswesen;Commercial et services
+31001_3051;Krankenhaus;Commercial et services
+31001_3052;Heilanstalt, Pflegeanstalt, Pflegestation;Commercial et services
+31001_3053;Ärztehaus, Poliklinik;Commercial et services
+31001_3054;Rettungswache;Commercial et services
+31001_3060;Gebäude für soziale Zwecke;Commercial et services
+31001_3061;Jugendfreizeitheim;Commercial et services
+31001_3062;Freizeit-, Vereinsheim, Dorfgemeinschafts-, Bürgerhaus;Commercial et services
+31001_3063;Seniorenfreizeitstätte;Commercial et services
+31001_3064;Obdachlosenheim;Commercial et services
+31001_3065;Kinderkrippe, Kindergarten, Kindertagesstätte;Commercial et services
+31001_3066;Asylbewerberheim;Résidentiel
+31001_3070;Gebäude für Sicherheit und Ordnung;Commercial et services
+31001_3071;Polizei;Commercial et services
+31001_3072;Feuerwehr;Commercial et services
+31001_3073;Kaserne;Commercial et services
+31001_3074;Schutzbunker;Commercial et services
+31001_3075;Justizvollzugsanstalt;Commercial et services
+31001_3080;Friedhofsgebäude;Commercial et services
+31001_3081;Trauerhalle;Commercial et services
+31001_3082;Krematorium;Commercial et services
+31001_3090;Empfangsgebäude;Commercial et services
+31001_3091;Bahnhofsgebäude;Commercial et services
+31001_3092;Flughafengebäude;Commercial et services
+31001_3094;Gebäude zum U-Bahnhof;Commercial et services
+31001_3095;Gebäude zum S-Bahnhof;Commercial et services
+31001_3097;Gebäude zum Busbahnhof;Commercial et services
+31001_3098;Empfangsgebäude Schifffahrt;Commercial et services
+31001_3100;Gebäude für öffentliche Zwecke mit Wohnen;Fonction mixte avec usage résidentiel
+31001_3200;Gebäude für Erholungszwecke;Commercial et services
+31001_3210;Gebäude für Sportzwecke;Sportif
+31001_3211;Sport-, Turnhalle;Sportif
+31001_3212;Gebäude zum Sportplatz;Sportif
+31001_3220;Badegebäude;Sportif
+31001_3221;Hallenbad;Sportif
+31001_3222;Gebäude im Freibad;Sportif
+31001_3230;Gebäude im Stadion;Sportif
+31001_3240;Gebäude für Kurbetrieb;Commercial et services
+31001_3241;Badegebäude für medizinische Zwecke;Commercial et services
+31001_3242;Sanatorium;Commercial et services
+31001_3260;Gebäude im Zoo;Commercial et services
+31001_3261;Empfangsgebäude des Zoos;Commercial et services
+31001_3262;Aquarium, Terrarium, Voliere;Commercial et services
+31001_3263;Tierschauhaus;Commercial et services
+31001_3264;Stall im Zoo;Commercial et services
+31001_3270;Gebäude im botanischen Garten;Commercial et services
+31001_3271;Empfangsgebäude des botanischen Gartens;Commercial et services
+31001_3272;Gewächshaus (Botanik);Commercial et services
+31001_3273;Pflanzenschauhaus;Commercial et services
+31001_3280;Gebäude für andere Erholungseinrichtung;Commercial et services
+31001_3281;Schutzhütte;Commercial et services
+31001_3290;Touristisches Informationszentrum;Commercial et services
+31001_9998;Nach Quellenlage nicht zu spezifizieren;Indifférencié
+51001_1001;Wasserturm;delete
+51001_1002;Kirchturm;delete
+51001_1003;Aussichtsturm;delete
+51001_1004;Kontrollturm;delete
+51001_1005;Kühlturm;delete
+51001_1006;Leuchtturm;delete
+51001_1007;Feuerwachturm;delete
+51001_1008;Sende-,Funkturm;delete
+51001_1009;Stadt-,Torturm;delete
+51001_1010;Förderturm;delete
+51001_1011;Bohrturm;delete
+51001_1012;Schloss-, Burgturm;delete
+51001_9998;Nach Quellenlage nicht zu spezifizieren;delete
+51001_9999;Sonstiges;delete
+51002_1215;Biogasanlage;delete
+51002_1220;Windrad;delete
+51002_1230;Solarzellen;delete
+51002_1250;Mast;delete
+51002_1251;Freileitungsmast;delete
+51002_1260;Funkmast;delete
+51002_1280;Radioteleskop;delete
+51002_1290;Schornstein;delete
+51002_1330;Kran;delete
+51002_1331;Drehkran;delete
+51002_1332;Portalkran;delete
+51002_1333;Laufkran;delete
+51002_1350;Hochofen;delete
+51002_1400;Umformer;delete
+51002_9999;Sonstiges;delete
+51003_1201;Silo;delete
+51003_1205;Tank;delete
+51003_1206;Gasometer;delete
+51003_9999;Sonstiges;delete
+51006_1430;Zuschauertribüne;delete
+51006_1431;Zuschauertribüne, überdacht;delete
+51006_1432;Zuschauertribüne, nicht überdacht;delete
+51006_1440;Stadion;delete
+51006_1441;Stadion, überdacht;delete
+51006_1442;Stadion, nicht überdacht;delete
+51006_1470;Sprungschanze (Anlauf);delete
+51006_1490;Gradierwerk;delete
+51006_9999;Sonstiges;delete
+51007_1100;Historische Wasserleitung;delete
+51007_1210;Wachturm;delete
+51007_1400;Befestigung (Burgruine);delete
+51007_1500;Historische Mauer;delete
+51007_1510;Stadtmauer;delete
+51007_1520;Sonstige historische Mauer;delete
+51007_9999;Sonstiges;delete
+51009_1610;Überdachung;delete
+51009_1611;Carport;delete
+51009_1700;Mauer;delete
+51009_1750;Denkmal;delete
+51009_9999;Sonstiges;delete
+52003_1010;Schiffshebewerk;delete
+52003_1020;Kammerschleuse;delete
+53001_1800;Brücke;delete
+53001_1806;Drehbrücke;delete
+53001_1807;Hebebrücke;delete
+53001_1808;Zugbrücke;delete
+53001_1830;Hochbahn, Hochstraße;delete
+53001_1890;Schleusenkammer;delete
+53009_2030;Staumauer;delete
+53009_2050;Wehr;delete
+53009_2060;Sicherheitstor;delete
+53009_2070;Siel;delete
+53009_2080;Sperrwerk;delete
+53009_2090;Schöpfwerk;delete

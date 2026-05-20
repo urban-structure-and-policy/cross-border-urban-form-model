@@ -1,0 +1,49 @@
+---
+title: "02c_DevelopmentBlockIdentification"
+date: "2025-08-15"
+output: html_document
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = scriptdir)
+```
+
+## setup
+```{r}
+library(sf)
+  CRS <- st_crs(CRS)
+library(dplyr)
+```
+
+#read data
+```{r}
+bblocksFR.pth <- file.path(resultdata, '02c_DevelopmentBlockIdentification', '02c_02_DevelopmentBlockIdentificationFR.gpkg')
+bblocksFR <- st_read(bblocksFR.pth)
+bblocksFR <- st_transform(bblocksFR, CRS)
+
+bblocksDE.pth <- file.path(resultdata, '02c_DevelopmentBlockIdentification', '02c_02_DevelopmentBlockIdentificationDE.gpkg')
+bblocksDE <- st_read(bblocksDE.pth)
+bblocksDE <- st_transform(bblocksDE, CRS)
+```
+
+#merge and assign Block ID
+```{r}
+bblocks <- rbind(bblocksDE,bblocksFR)
+
+bblocks <- bblocks %>%
+  mutate(block_id = row_number())
+```
+
+# output and tidy up
+```{r}
+bblocks.path <- file.path(resultdata, '02c_DevelopmentBlockIdentification', '02c_03_DevelopmentBlocks.gpkg')
+
+st_write(bblocks, bblocks.path, delete_layer=TRUE)
+```
+
+
+
+
+
+

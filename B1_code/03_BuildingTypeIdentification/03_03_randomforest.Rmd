@@ -1,0 +1,323 @@
+---
+title: "Building Type Classifictaion"
+output: randomforest
+date: "`r Sys.Date()`"
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = scriptdir)
+
+library(sf)
+library(tidyverse)
+library(randomForest)
+library(kableExtra)
+library(vcd)
+library(e1071)
+library(caret)
+```
+
+## Define input and output paths
+
+```{r}
+v <- 'v2'
+traincol <- paste0("training_", v)
+descrcol <- paste0("description_", v)
+
+# set file ending to append to export filenames
+file_ending = paste0('_', Sys.Date())
+lay = "buildings_training_data_equal"
+
+
+## inpaths
+
+# Path to training data with 300 buildings per type
+tdata_p <- file.path(procdata, child_env$subdir, '03_02_trainingdata.gpkg')
+
+# Path to building data with calculated metrics as csv file (ArcGIS toolbox output)
+bmetrics_p <- file.path(resultdata, child_env$subdir, '03_01b_buildings_metrics.csv')
+
+# Building geometries
+building_geom_p <- file.path(resultdata, "00_Harmonisation/00b_02_buildings/00b_02_buildings.gpkg")
+
+# building types descriptions
+btypes_p <-  file.path(procdata, child_env$subdir, '03_02_buildingtypes.csv')
+
+
+## outpaths
+
+# model
+rf_model_out <- file.path(procdata, child_env$subdir, "03_03_rf_models", paste0("03_03_rfmodel", file_ending, ".rds"))
+# create model folder
+dir.create(dirname(rf_model_out), recursive = TRUE, showWarnings = FALSE)
+
+# classified buildings
+btypes_out <- file.path(resultdata, child_env$subdir, "03_03_buildingtypes.gpkg")
+
+```
+
+## load training data and bilding metrics
+
+```{r}
+# load-data
+tdata_raw <-  read_sf(tdata_p, layer = lay) %>% st_drop_geometry()
+bmetrics_raw <- read.csv2(bmetrics_p)
+```
+
+## prepare building data:
+
+```{r}
+# calculate-metrics
+
+# calculate ratio of building volume sum in parcel to area of parcel
+bmetrics_calc <- bmetrics_raw %>%
+  group_by(parcel_id) %>%
+  mutate(PRCL_V = sum(V)) %>%
+  ungroup() %>%
+  mutate(PRCL_V = ifelse(is.na(parcel_id), V, PRCL_V),
+         PRCL_RATIO_V_A = PRCL_V/PRCL_A,
+         )
+
+# get dominant building function per block via Building Volume
+blockfunctions <- bmetrics_calc %>%
+  group_by(block_id, function.) %>%
+  summarise(volume = sum(V, na.rm = TRUE), .groups = 'drop') %>%
+  mutate(
+    BLCK_TYPE = factor(function., levels = c("Résidentiel", "Fonction mixte avec usage résidentiel", "Fonction mixte non résidentiel","Commercial et services", "Industriel", "Religieux", "Sportif", "Agricole", "Annexe", "Indifférencié"))  # block type as factor with functions in order of importance
+  ) %>%
+  group_by(block_id) %>%
+  slice_max(volume) %>%
+  slice_min(order_by = BLCK_TYPE, n = 1) %>%  # keep highest priority in case of same volume
+  ungroup()%>%
+  na.omit()
+
+bmetrics_calc <- bmetrics_calc %>%
+  left_join(select(blockfunctions, block_id, BLCK_TYPE), by = "block_id")
+```
+
+
+```{r}
+# clean-bdata
+
+## Handle NA values: 
+
+# Inspect which columns have NA values
+colSums(is.na(bmetrics_calc))
+
+# Replacing NA with fitting values 
+# - CNT_NGHB_R50 and DIST_NGHB_R50 are NA if no neighbors within 50m radius -> set to 0 for Count and set to DIST_NGHB_D (distance of closest neighbour) for DIST_NGHB_R50
+# - columns with block/parcel information are NA if they have no intersections with any block/parcel -> set "noblock" for types; set to 0 OR impute for area and ratio (next steps)
+# - column CNT_PRTS didn't have volume information in the original data and could therefore not be determined as main part of a building (volume as selector field in toolbox step 1) -> only made it to building dataset if it was the only part of a building -> set to 1
+
+bmetrics <- bmetrics_calc %>%
+  mutate(
+    CNT_PRTS = replace_na(CNT_PRTS, 1), # number of parts in building
+    CNT_NGHB_R50 = replace_na(CNT_NGHB_R50, 0), # number of buildings in 50m radius
+    DIST_NGHB_R50 = coalesce(DIST_NGHB_R50, DIST_NGHB_D), # replace NA in DIST_NGHB_R50 with value from DIST_NGHB_D
+    BLCK_TYPE = replace_na(as.character(BLCK_TYPE), "noblock"),  # block main building function
+  )
+
+## Either impute missing block and parcel area with median value of respective column:
+#bmetrics$BLCK_A <- data.frame(impute(data.matrix(bmetrics), "median"))$BLCK_A
+#bmetrics$PRCL_A <- data.frame(impute(data.matrix(bmetrics), "median"))$PRCL_A
+#bmetrics$RATIO_A_PRCL <- data.frame(impute(data.matrix(bmetrics), "median"))$RATIO_A_PRCL
+
+## Or set to 0
+bmetrics <- bmetrics %>%
+  mutate(
+    BLCK_A = replace_na(BLCK_A, 0),  # block area
+    PRCL_A = replace_na(PRCL_A, 0),  # parcel area
+    RATIO_A_PRCL = replace_na(RATIO_A_PRCL, 0),  # ratio building area to parcel area
+    PRCL_RATIO_V_A = replace_na(PRCL_RATIO_V_A, 0)  # ratio volume of all buildings in parcel to parcel area
+  )
+
+# Fix function_code and is_res columns
+residential_functions <- c("Résidentiel", "Fonction mixte avec usage résidentiel")
+bmetrics <- bmetrics %>%
+ mutate(
+   FNC_CODE = as.integer(factor(function.)),
+   IS_RES = if_else(function. %in% residential_functions, 1L, 0L)
+ )
+
+colSums(is.na(bmetrics))
+```
+
+## Join training data and building metrics
+
+```{r}
+# merge-datasets
+
+# Merge the training dataset with the building dataset to get building metrics
+tdata_raw <- tdata_raw %>%
+    rename(training_descr = descrcol,
+    training = traincol
+  )
+
+training_data <- tdata_raw %>%
+  select(building_id, training, training_descr) %>%
+  inner_join(bmetrics , by = "building_id")
+
+# View columns and datatypes
+str(training_data)
+```
+
+## Keep only variables to use for prediction
+
+```{r}
+# specify-variables
+
+# Specify the target variable and predictors
+target_column <- "training"
+predictor_columns <- training_data %>%
+  #select(CNT_PRTS:RATIO_A_PRCL) %>%   # Include only feature columns
+  select(CNT_PRTS, FNC_CODE, IS_RES, H, V, A, C, SHPX_2D, RATIO_C_A, RATIO_MBR_A,  CNT_NDS, DIST_NGHB_D, CNT_NGHB_D, RATIO_SW, CNT_NGHB_R50, DIST_NGHB_R50, CNT_ADD, BLCK_A, BLCK_TYPE, PRCL_A, RATIO_A_PRCL, PRCL_RATIO_V_A) %>%
+  names()
+
+# Prepare the data for training
+X_train <- training_data[, predictor_columns]
+y_train <- as.factor(training_data[[target_column]])
+```
+
+## V1: Train simple Random Forest Model
+
+```{r}
+# train-model
+
+# Train a random forest model
+set.seed(161)
+rf_model <- randomForest(x = X_train, y = y_train, ntree = 500, importance = TRUE)
+
+# Print model summary
+print(rf_model)
+
+# save model
+#saveRDS(rf_model, file = prf_model_out)
+```
+
+## V2: RF Model with parameter tuning (caret)
+
+```{r}
+# tuning
+
+# Prepare the df
+z_train <- X_train
+z_train$training <- y_train
+
+# Define the train control
+trControl <- trainControl(method = "oob", #number = 5,
+    search = "grid")
+
+# Run the model
+tuneGrid <- expand.grid(.mtry = seq(1, length(predictor_columns), 2))
+set.seed(161)
+rf_mtry <- train(training~.,
+    data = z_train,
+    method = "rf",
+    metric = "Accuracy",
+    tuneGrid = tuneGrid,
+    trControl = trControl,
+    importance = TRUE
+    )
+best_mtry <- rf_mtry$bestTune$mtry
+print(rf_mtry)
+
+set.seed(161)
+rf_model <- randomForest(x = X_train, y = y_train, mtry = best_mtry, importance = TRUE)
+print(rf_model)
+
+# Save model
+saveRDS(rf_model, file = rf_model_out)
+```
+
+
+## Variable Importance
+
+```{r}
+# variable-importance
+
+# Check variable importance
+importance_data <- as.data.frame(importance(rf_model))
+
+# Save the table object (as HTML)
+importance_table <- importance_data %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+  scroll_box(width = "100%", height = "400px")
+
+# Save the plot object
+importance_data$Variable <- rownames(importance_data)
+importance_plot <- ggplot(importance_data, aes(x = reorder(Variable, MeanDecreaseGini), y = MeanDecreaseGini)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10)) +
+  labs(title = "Variable Importance", x = "Variables", y = "Mean Decrease Gini")
+
+importance_table
+importance_plot
+```
+
+## Get kappa statistic
+
+```{r}
+# kappa
+
+n_class <- length(rf_model$classes)
+
+Kappa(rf_model$confusion[1:n_class,1:n_class])
+```
+
+
+## Apply model to full data set
+
+```{r}
+# predictions
+
+# Prepare the complete building dataset features
+buildings_predict <- bmetrics %>%
+  select(all_of(predictor_columns))
+
+# Predict building types
+buildings_predict$building_type <- predict(rf_model, newdata = buildings_predict)
+```
+
+## Save results
+
+```{r}
+# save-results
+
+# Load geometries
+building_geom <- read_sf(building_geom_p) %>%
+  select(building_id, geom)
+
+# Join results to geometries
+buildings_result <- bmetrics_raw %>%
+  select(fid:number, block_id, parcel_id) %>%   # depends on structure of building metrics file
+  left_join(building_geom, by = "building_id")
+buildings_result$building_type <- as.integer(as.character(buildings_predict$building_type)) # results are as factors -> only as.integer would give number 1-12 not type codes
+
+# Join type descriptions
+btypes <- read.csv(btypes_p)
+buildings_result <- left_join(buildings_result, btypes %>% select(-X), by = setNames(traincol, "building_type")) 
+buildings_result$fid <- as.integer(buildings_result$fid)
+
+# Export as gpkg
+message <- capture.output(st_write(buildings_result, btypes_out, append = FALSE))
+```
+
+
+```{r}
+# free memory
+rm(
+  v, traincol, descrcol, file_ending, lay,
+  tdata_p, bmetrics_p, building_geom_p, btypes_p,
+  rf_model_out, btypes_out,
+  tdata_raw, bmetrics_raw, bmetrics_calc, blockfunctions, bmetrics,
+  residential_functions,
+  target_column, predictor_columns, X_train, y_train,
+  z_train, trControl, tuneGrid, rf_mtry, best_mtry,
+  n_class,
+  buildings_predict, building_geom, buildings_result, btypes
+)
+gc()
+```

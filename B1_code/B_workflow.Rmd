@@ -1,0 +1,552 @@
+---
+title: "Workflow urban form and urban metrics"
+output: html_document
+---
+
+For detailed explanations and comments on what happens in each step, please refer to the respective code file and the additional files in the respective code and process data folders.
+
+Functionality to be included in the future:
+- parcel, block, building IDs indicating relations between each other
+- open source implementation of code currently run using ArcGIS Pro / arcpy (mainly building metrics toolbox)
+
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r imports, warning=FALSE}
+library(jsonlite)
+library(qgisprocess)
+library(xml2)
+library(reticulate) # for arcpy
+library(glue)
+library(fs)
+library(stringr)
+library(lubridate)
+```
+
+```{r paths, results='hide'}
+
+# to run for test data
+test <- FALSE
+
+# create environment that contains all variables defined here so they can be accessed when running child scripts
+child_env <- new.env()
+
+# define directory paths
+child_env$scriptdir <- getwd()
+child_env$maindir <- dirname(dirname(getwd()))
+child_env$basedata <- normalizePath("../../A_basedata", winslash = "/")
+child_env$procdata <- normalizePath("../B2_procdata", winslash = "/")
+child_env$resultdata <- normalizePath("../../A_resultdata", winslash = "/")
+
+# set dir paths to use for test data
+if (test){
+  child_env$procdata <- paste0(child_env$procdata, "_test")
+  child_env$resultdata <- paste0(child_env$resultdata, "_test")
+  child_env$test <- TRUE
+}
+
+# set parameters
+child_env$commit_sha <- system("git rev-parse HEAD", intern = TRUE)  # get SHA of latest commit to save code versions next to outputs
+child_env$date <- format(Sys.Date(), "%Y%m%d")
+child_env$CRS <- 32632  # project crs: integer from valid EPSG code
+
+# include defined variables in global environment as well
+list2env(as.list(child_env), envir = .GlobalEnv)  
+
+# set chunk output dir (needed for knit_child)
+knitdir <- dir_create(file.path(scriptdir, 'B0_R_knit'))  # -> added to gitignore
+knitr::opts_knit$set(output.dir = knitdir)  
+
+```
+
+
+## Arcpy setup
+
+(for loading data from gdbs and running the building metrics toolbox)
+
+```{r arcpy-setup}
+# Point reticulate to the correct ArcGIS Pro Python
+use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe", required = TRUE)
+
+# Attach arcpy inside child_env
+child_env$arcpy <- import("arcpy", delay_load = TRUE)
+```
+>> When getting an error, go into Tools > Global Options > Python > Uncheck box "Automatically activate ..." 
+>> R will restart > run imports and path definitions again
+
+>> For RuntimeError: The Product License has not been initialized., open ArcGIS Pro and log in.
+
+
+## QGIS Process Setup
+
+- copies all QGIS model files into the QGIS system processing folder so they can be called as algorithms 
+- also copies files containing 'add_to_toolbox' in their names to the toolbox as custom scripts so they can be called from models (currently only 00.02.04aa)
+- sometimes old versions of algorithms get loaded here although they run correctly in QGIS, try:
+    - run qgis_configure(use_cached_data = TRUE) and delete the cache folder, then rerun this code
+    
+```{r qgisprocess-setup}
+model_path <- file.path(Sys.getenv("APPDATA"), "QGIS", "QGIS3", "profiles", "default", "processing", "models")
+script_path <- file.path(Sys.getenv("APPDATA"), "QGIS", "QGIS3", "profiles", "default", "processing", "scripts")
+
+if (!file.exists(model_path) | !file.exists(script_path)) {
+  
+  print("Processing models or script folder not in default location, in QGIS Settings > Options > Processing, check for the correct folder paths.")
+  
+} else {
+  
+  # get all QGIS models and scripts from project scripts folder
+  model_files <- list.files(path = scriptdir, pattern = "\\.model3$", recursive = TRUE, full.names = TRUE)
+  script_files <- list.files(path = scriptdir, pattern = "add_to_toolbox", recursive = TRUE, full.names = TRUE)
+  
+  # Edit each file to have the file name set as the algorithm name -> sometimes have old names, easier access when same as file name
+  for (model_file in model_files) {
+    model_name <- tools::file_path_sans_ext(basename(model_file))
+
+    # Read and modify XML
+    xml <- read_xml(model_file)
+    option_nodes <- xml_find_all(xml, './/Option[@name="model_name"]')
+
+    if (length(option_nodes) > 0) {
+      xml_set_attr(option_nodes[[1]], "value", model_name)
+      write_xml(xml, model_file)
+    }
+  }
+  
+  file.copy(from = model_files, to = file.path(model_path, basename(model_files)), overwrite = TRUE)
+  cat(length(model_files), "model3 files copied to", model_path, "\n")
+  
+  file.copy(from = script_files, to = file.path(script_path, basename(script_files)), overwrite = TRUE)
+  cat(length(script_files), "custom script file copied to", model_path, "\n")
+  
+  # Load and view added models
+  qgis_configure(quiet = TRUE)
+  qgis_search_algorithms(provider = "script|model")
+}
+```
+
+## Writing and running Children
+
+- Don't use chunk names in children, they will result in problems when running a script several time from the parent and when they are not unique between all children
+- Include `knitr::opts_knit$set(root.dir = scriptdir)` in the child script so the relative paths work -> this only works when actually knitting (i.e. running from parent), not when working in the child itself. When working in the child and running individual chunks, you can use `setwd(scriptdir)` in the chunks where you are defining paths. You can either use `normalizePath()` to make the paths absolute when defining them or keep them relative and also run `setwd()` in the chunk where you are calling the paths. 
+- We are using a child environment for variable interaction between parent and child. Variables can be defined in the parent using `child_env$varname` and then be called as `varname` in the child. Variables defined within the child can again be accessed from the parent using `child_env$childvar`. To avoid large variables staying in memory longer than necessary, use `rm(list = c("childvar1", "childvar2"))` at the end of your children.
+  - Children need to be called specifying `child_env`: 
+    - Use `knitr::knit_child(spath("step1.Rmd"), envir = child_env, quiet = TRUE)` to run `.rmd` files (quiet suppresses the progress bar and messages)
+    - Use `sys.source("step1.R", envir=child_env)` to run `.R` files
+- Assign the command calling the child to a variable (`knittedoutput`) to not have the full child code and results printed as a long string
+    - You can view the knitted output of a child using `cat(knittedoutput)` (better format than `print()`)
+- If you want to get specific output from the child, you can assign it to variables (e.g. `message`) and then print them using `child_env$message` in the parent. 
+    - You can get the message from a command using e.g. `message <- capture.output(st_write(overlap, outpath, append = FALSE))` 
+
+
+Helper functions for calling scripts:
+
+```{r script-model-access}
+# uses subdir defined in each Step, if the subdir has more subfolders, include them in the filename using / 
+spath <- function(fname){
+  normalizePath(file.path(scriptdir, child_env$subdir, fname))
+}
+
+# run QGIS algorithms:
+run_model <- function(algorithm, rawjson) {
+
+  # convert JSON copied from QGIS to list
+  inputparams <- jsonlite::fromJSON(rawjson)
+
+  # run the QGIS model
+  qgis_result <- qgis_run_algorithm(
+    algorithm,
+    !!!inputparams
+  )
+
+  return(qgis_result)
+}
+
+# write a txt file containing the sha key and date into the result and processdata dir to reference the code version the file was created from
+write_sha <- function() {
+  dirs <- file.path(c(resultdata, procdata), child_env$subdir)
+  
+  # create dirs if they don't exist
+  lapply(dirs, function(d) if (!dir.exists(d)) dir.create(d, recursive = TRUE))
+  
+  # write file with commit version to dir
+  paths <- file.path(dirs, "commitversion.txt")
+  invisible(lapply(paths, function(p) writeLines(c(date, commit_sha), normalizePath(p, mustWork = FALSE))))
+}
+```
+
+# Code
+
+## --- 01 Area definition ---
+(Community selection necessary for feature selection in further harmonisation steps)
+
+```{r sub01}
+child_env$subdir <- "01_AreaDefinition"
+write_sha()
+```
+
+### 01a Get isochrones
+
+- Gets isochrone in 45 minute range.
+
+```{r}
+# due to changes in the road network, this does not always reproduce the same isochrones -> change the name of the version you want to keep manually and specify it in the next chunk to keep using it
+
+child_env$ors_url <- "http://url/ors"
+sys.source(spath("01a_Isochrones.R"), envir=child_env)
+```
+
+
+### 01b Community Selector based on Threshold value
+
+- Selects municipalities within the isochrone to be used as study area. 
+
+```{r, warning=FALSE, echo=FALSE}
+child_env$isochrone_version <- "_20240606"  # set to isochrone version to use
+
+knittedoutput <- knitr::knit_child(spath("01b_Community_Selector_Threshold.Rmd"), envir = child_env, quiet = TRUE)
+print(child_env$message)
+```
+
+
+## --- 00 Harmonisation ---
+
+- Harmonises German and French data sets into a common version. 
+
+### 00a Municipalities
+
+* Municipality harmonisation included in script 01b Community selection.
+
+
+### 00b 01 Addresses
+
+```{r sub00b-01}
+child_env$subdir <- "00_Harmonisation/00b_01_addresses"
+write_sha()
+```
+
+```{r}
+sys.source(spath("00b_01_address_csv_to_gpkg.R"), envir=child_env)
+```
+
+### 00b 02 Buildings
+
+```{r sub00b-02}
+child_env$subdir <- "00_Harmonisation/00b_02_buildings"
+child_env$lodyear <- "2020"  # the german buildings are stored in gdbs for different years on our server -> set the year of german buildings to load into the project folder 
+write_sha()
+```
+
+#### 00b.02.01 Copy buildings for germany to gpkg from server
+```{r}
+sys.source(spath("00b_02_01_loadfromserver_DE.R"), envir=child_env)
+```
+
+#### 00b.02.02 Prepare data for join
+```{r}
+sys.source(spath("00b_02_02a_prepareforjoin_crs_extent.R"), envir=child_env)
+```
+
+##### DE
+```{r}
+# change field names if necessary 
+sys.source(spath("00b_02_02ba_prepareforjoin_fieldcalculation_DE.R"), envir=child_env)
+```
+
+##### FR
+```{r}
+algorithm <- "model:00b_02_02bb_prepareforjoin_fieldcalculation_FR"
+
+#for (dep in c('57', '67')) {  # for testing
+for (dep in c('57', '67', '54', '68', '88')) {
+  rawjson <- glue('{{
+    "departements": "{procdata}/00_Harmonisation/00b_02_buildings/00b_02_02_prepareforjoin/departements.gpkg",
+    "new_fields": "{procdata}/00_Harmonisation/00b_02_buildings/00b_02_02_prepareforjoin/00b_02_02b_fieldcalculation/fr{dep}_parts.gpkg",
+    "reprojected_and_clipped_building_parts_fr": "{procdata}/00_Harmonisation/00b_02_buildings/00b_02_02_prepareforjoin/00b_02_02a_clip_communitiesbuffer20/fr{dep}_parts.gpkg"
+  }}')
+    
+  cat("\n---\nProcessing: FR", dep, format(now(), "%H:%M:%S"), "\n")
+  print(rawjson)
+  
+  qgis_result <- run_model(algorithm, rawjson)
+  print(qgis_result)
+}
+```
+
+#### 00b.02.03 Join FR & DE
+```{r}
+sys.source(spath("00b_02_03_join_frde.R"), envir=child_env)
+```
+
+#### 00b.02.04a Parts to buildings by region
+```{r}
+algorithm <- "model:00b_02_04a_parts_to_buildings_byregion"
+buildingsdir <- file.path(procdata, child_env$subdir, "00b_02_04_parts_to_building", "00b_02_04a_buildings")
+fieldcalcdir <- file.path(procdata, child_env$subdir, "00b_02_02_prepareforjoin", "00b_02_02b_fieldcalculation")
+dir_create(buildingsdir)
+
+regions <- dir_ls(fieldcalcdir) %>%  path_file() %>%  str_extract("^[^_]+") #extracts everything before the first underscore from files in field calc folder to get region names list
+
+for (region in regions) {
+  buildingspath <- file.path(procdata, "00_Harmonisation/00b_02_buildings/00b_02_04_parts_to_building/00b_02_04a_buildings", paste0(region, "_buildings.gpkg"))
+  print(buildingspath)
+  rawjson <- glue('{{
+    "buildings": "{buildingspath}",
+    "national_data_sources": "{procdata}/00_Harmonisation/00b_02_buildings/00b_02_03_join_frde/00b_02_03_parts.gpkg",
+    "osm": "{procdata}/00_Harmonisation/00b_02_buildings/00b_02_04a_OSM_merged_BW_RP_HE_FR_20km.gpkg",
+    "region": "{region}"  
+  }}')
+  
+  cat("\n---\nProcessing:", region, format(now(), "%H:%M:%S"), "\n")
+  print(rawjson)
+  
+  qgis_result <- run_model(algorithm, rawjson)
+  print(qgis_result)
+}
+```
+
+#### 00b.02.04b Merge regions back together
+```{r}
+sys.source(spath("00b_02_04b_merge_regions_back_together.R"), envir=child_env)
+```
+
+#### 00b.02.05 Join addresses to buildings
+```{r}
+sys.source(spath("00b_02_05_join_addr_to_bldg.R"), envir=child_env)
+```
+
+#### 00b.02.06 Clip to communities
+```{r}
+sys.source(spath("00b_02_06_clip_to_communities.R"), envir=child_env)
+```
+
+
+### 00c Parcels
+
+```{r sub00c-01}
+child_env$subdir <- "00_Harmonisation/00c_parcels"
+write_sha()
+```
+
+```{r}
+sys.source(spath("00c_parcel_harmonisation.R"), envir=child_env)
+```
+
+
+### 00d Streets
+
+```{r sub00d-01}
+child_env$subdir <- "00_Harmonisation/00d_streets"
+write_sha()
+```
+
+```{r}
+sys.source(spath("00d_street_harmonisation.R"), envir=child_env)
+```
+
+
+### 00e Corine
+
+```{r sub00d-01}
+child_env$subdir <- "00_Harmonisation/00e_corine"
+write_sha()
+```
+
+```{r}
+algorithm <- "model:00e_CorineHarmonisation"
+
+area_selection <- file.path(resultdata, '01_AreaDefinition', '01b_communities.gpkg')
+corine <- paste0(file.path(basedata, 'EU', 'Corine', 'clc2018', 'corine_2018.gdb'),"|layername=clc18_all")
+corine_selection <- file.path(resultdata, '00_Harmonisation', '00e_corine', '00e_corine.gpkg')
+
+rawjson <- glue('{{
+    "area_selection": "{area_selection}",
+    "corine": "corine",
+    "corine_selection": "{corine_selection}"
+  }}')
+
+qgis_result <- run_model(algorithm, rawjson)
+```
+
+
+## --- 02c Development Block Identification --- 
+
+```{r sub02c}
+child_env$subdir <- "02c_DevelopmentBlockIdentification"
+write_sha()
+```
+
+### 02c.01 Parcel Analysis
+
+- Prepare parcel data.
+
+```{r}
+sys.source(spath("02c_01_ParcelAnalysis.Rmd"), envir=child_env)
+```
+
+### 02c.02 Delaunay Triangulation, Block Dissolve
+
+- Run block delimitation separately for Germany and France
+
+```{r}
+algorithm <- "model:02c_02_DelaunayTriangulation_BlockDissolve"
+
+# FR
+rawjson <- '{
+    "devblocks_by_country": "{resultdata}/02c_DevelopmentBlockIdentification/02c_02_DevelopmentBlockIdentificationFR.gpkg",
+    "join_parcel_street_names": "{resultdata}/02c_DevelopmentBlockIdentification/02c_01_DevelopmentBlockIdentificationFR.gpkg"
+  }'
+
+qgis_result1 <- run_model(algorithm, rawjson)
+
+# DE
+rawjson <- '{
+    "devblocks_by_country": "{resultdata}/02c_DevelopmentBlockIdentification/02c_02_DevelopmentBlockIdentificationDE.gpkg",
+    "join_parcel_street_names": "{resultdata}/02c_DevelopmentBlockIdentification/02c_01_DevelopmentBlockIdentificationDE.gpkg"
+  }'
+
+qgis_result2 <- run_model(algorithm, rawjson)
+```
+
+### 02c.03 Merge and Assign Block ID
+
+- Merge and Assign Block ID
+
+```{r}
+sys.source(spath("02c_03_Merge_BlockID.Rmd"), envir=child_env)
+```
+
+
+## --- 03 Building Type Identification ---
+
+- Random forest building type classification based on calculation of building metrics.
+
+```{r sub03}
+child_env$subdir <- "03_BuildingTypeIdentification"
+write_sha()
+```
+
+### 03.1 Building Metrics
+
+#### 03.1a Data to GeoDatabase
+
+- Takes harmonised data sets needed for building metric calculation and saves them into a GDB for better handling in ArcGIS Pro.
+
+```{r}  
+sys.source(spath("03_01a_x5_data_to_gdb.R"), envir=child_env)
+```
+
+#### 03.1b Run Toolbox
+
+- Building metrics calculation using ArcGIS Pro toolbox.
+- Takes a long time.
+
+```{r}
+sys.source(spath("03_01b_run_toolbox.R"), envir=child_env)
+```
+
+### 03.2 Prepare Training Data
+
+- Prepares training data from different sources and harmonises it to our building geometries and common building types.
+
+```{r}
+knittedoutput <- knitr::knit_child(spath("03_02_clean_training_data.Rmd"), envir = child_env, quiet = TRUE)
+print(child_env$message1)
+print(child_env$message2)
+```
+
+
+### 03.3 Random Forest
+
+- Trains and runs a random forest model to classify buildings.
+
+```{r}
+knittedoutput <- knitr::knit_child(spath("03_03_randomforest.Rmd"), envir = child_env, quiet = TRUE)
+print(child_env$message)
+print(child_env$rf_model)
+child_env$importance_table
+child_env$importance_plot
+```
+
+
+### 03.4 Type to blocks
+
+- Join Building type with largest volume to development blocks
+
+```{r}
+knittedoutput <- knitr::knit_child(spath("03_04_type_to_blocks.Rmd"), envir = child_env, quiet = TRUE)
+```
+
+## --- 04 Block Age GHSAge ---
+
+- Extracts block construction age from GHSAge layer.
+
+```{r sub04}
+child_env$subdir <- "04_BlockAge_GHSAGE"
+write_sha()
+```
+
+
+### 04 Extract GHS Age 
+
+- Extract block age from GHS Age layer 
+- Tests different extraction approaches, by default chooses approach with highest accuracy within tolerance to apply to whole dataset; define `approach` parameter to override
+
+```{r}
+child_env$approach <- "wmean"
+
+knittedoutput <- knitr::knit_child(spath("04_extract_ghs_age.Rmd"), envir = child_env, quiet = TRUE)
+#child_env$results
+cat(child_env$message1)
+cat(child_env$message2)
+```
+
+
+## --- 05a Accessibility Analysis --- 
+
+- Calculate Closeness Centrality of each block based on distance-weighted reachable population
+
+This part of the code is based on and largely taken from [Jehling & Kluwe (2026)](https://doi.org/10.5281/zenodo.19481958)
+It mainly uses python and QGIS scripts.
+
+```{r sub05a}
+child_env$subdir <- "05a_AccessibilityAnalysis"
+write_sha()
+```
+
+### 05a.01 Centrality 50 Prozent
+
+- Loads street network from OSM. Projection of a point grid of any grid width onto a road network, adding the number of inhabitants to points.
+
+> run 05a_01_OSM_highways2points+einwohner.py from QGIS Python console
+
+### 05a.02 OSM Highways2Points + Einwohner
+
+- Selection of 50 % of all points (less computation time), requests to local ORS instance - origin-distance matrix is created from each starting point to all target points.
+
+> Run 05a_02_centrality_50Prozent.py from QGIS Python console
+
+### 05a.03 Accessibility Calculations
+
+#### 05a.03a Calculate closeness centrality
+
+- Merge all matrices, apply decay functions and weighting for each point, eliminate extreme values. Calculate composite index from driving times and walking/cycling distances.
+- merge_matrix, new_accessibility, interpolation (bools) are set to TRUE -> change in script if running again and no new calculations are necessary
+
+```{r}
+sys.source(spath("05a_03a_impedance+weighting_50perc.R"), envir=child_env)
+```
+
+
+#### 05a.03b Join regions 
+
+- Join to blocks and join regions together
+
+```{r}
+# join to blocks and join regions together
+sys.source(spath("05a_03b_join_regions.R"), envir=child_env)
+```
+

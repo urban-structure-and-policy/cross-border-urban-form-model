@@ -1,0 +1,120 @@
+
+```{r}
+library(sf)
+library(dplyr)
+
+knitr::opts_knit$set(root.dir = scriptdir)
+```
+
+
+```{r}
+communities_de_path <- file.path(basedata, "DE/GEMEINDEN/VG25_GEM.shp")
+communities_fr_path <- file.path(basedata, "FR/ADMIN-EXPRESS_4-0__GPKG_LAMB93_FXX_2025-10-15/ADMIN-EXPRESS/1_DONNEES_LIVRAISON_2025-10-00142/ADE_4-0_GPKG_LAMB93_FXX-ED2025-10-15/ADE_4-0_GPKG_LAMB93_FXX-ED2025-10-15.gpkg")
+
+isochrone_path <- file.path(resultdata, child_env$subdir, paste0("01a_isochrones", isochrone_version,".gpkg"))
+
+communities_de_raw <- st_read(communities_de_path, quiet = TRUE)
+communities_fr_raw <- st_read(communities_fr_path, quiet = TRUE, layer = "commune")
+
+# load isochrone and simplify geometry
+isochrone <- st_read(isochrone_path, quiet = TRUE, layer = "isochrones") %>% 
+  st_transform(crs = 32632) %>%
+  st_simplify(dTolerance = 1, preserveTopology = TRUE)
+
+out_00a <- file.path(resultdata, "00_Harmonisation", "00a_municipalities", "00a_municipalities.gpkg")
+outpath <- file.path(resultdata, child_env$subdir, "01b_communities.gpkg")
+
+# define communities to add manually by AGS/INSEE key
+add_manually <- c(57168, 57614, 57743, 67077, 67094, 67096, 67167, 67368, 7332025, 7338001,7338005,8216029,8236044,8317031,8317059,8317068,8317118) %>%
+  as.character(.) %>%
+  ifelse(nchar(.) == 7, paste0("0", .), .)  # add leading zeros in Germany (7 instead of 8 digits, France has 5)
+```
+
+```{r}
+communities_de <- communities_de_raw %>%
+  rename(
+    key = AGS,
+    name = GEN,
+    region = SN_L
+  ) %>%
+  select(key, name, region) %>%
+  mutate(region = case_when(
+    region == "07" ~ "rp",
+    region == "08" ~ "bw",
+    region == "06" ~ "he",
+    TRUE ~ region),
+    country = "de") %>%
+  st_transform(crs = 32632)
+
+communities_fr <- communities_fr_raw %>% 
+  rename(
+    key = code_insee,
+    name = nom_officiel,
+    region = code_insee_du_departement,
+    geometry = geometrie
+  ) %>% 
+  select(key, name, region) %>% 
+  mutate(country = "fr",
+         region = paste0(country, region)) %>%
+  st_transform(crs = 32632)
+
+communities <- rbind(communities_de, communities_fr)
+
+# create test dataset
+if (test) {
+  communities <- communities[communities$name %in% c("Lauterbourg", "Neuburg am Rhein", "Au am Rhein"), ]
+}
+```
+
+
+
+```{r}
+Community_Selector_Threshold_sf <- function(percentage_of_coverage = 20) {
+  
+  # get all communities with intersections
+  overlap_coms <- communities %>%
+    filter(lengths(st_intersects(., isochrone)) > 0)
+
+  # Calculate intersections (clipped parts)
+  overlap_parts <- st_intersection(overlap_coms, isochrone)
+
+  # Calculate overlap areas per community
+  overlaps <- overlap_parts %>%
+    mutate(
+      overlap_area = st_area(geometry),
+      # Match the community polygon
+      community_area = st_area(overlap_coms$geometry[match(key, overlap_coms$key)]),
+      isochrone_pc = as.numeric(overlap_area / community_area * 100)
+    ) %>% 
+    st_drop_geometry()
+  
+  selected_communities <- overlap_coms %>%
+    left_join(overlaps, by = c("key", "name", "region", "country")) %>%
+    filter(isochrone_pc > percentage_of_coverage) %>%
+    
+    # manually add communities that would be holes in area of interest but do not intersect or have <20% overlap with the isochrone
+    bind_rows(communities %>% filter(key %in% add_manually)) %>%
+    distinct(key, .keep_all = TRUE) %>%
+    
+    select(key, name, region, country)
+  
+  # Return selected communities
+  return(selected_communities)
+}
+
+overlap <- Community_Selector_Threshold_sf()
+
+message <- capture.output({
+  st_write(communities, out_00a, append = FALSE)
+  st_write(overlap, outpath, layer = "communities", append = FALSE)
+  st_write(overlap[overlap$region == "bw", ], outpath, layer = "communities_bw", append = FALSE)
+  st_write(overlap[overlap$region == "rp", ], outpath, layer = "communities_rp", append = FALSE)
+  st_write(overlap[overlap$country == "fr", ], outpath, layer = "communities_fr", append = FALSE)
+})
+
+```
+
+```{r}
+rm(list = c("isochrone", "overlap", "communities_de", "communities_fr", "communities_de_raw", "communities_fr_raw"), envir = child_env)
+```
+
