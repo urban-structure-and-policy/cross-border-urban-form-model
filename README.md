@@ -3,7 +3,7 @@
 
 Comparing urban form quantitatively is highly valuable for understanding its structures and dynamics. However, making buildings, streets, plots and blocks readable 
 across countries is challenging due to extensive preprocessing and harmonisation efforts. 
-This repository provides a preprocessing workflow to harmonise administrative data from France and Germany for modelling urban form. 
+This repository provides a preprocessing workflow to harmonise administrative data from different countries for modelling urban form, using the examples of France and Germany. 
 It includes preprocessing steps for municipalities, parcels, streets, addresses, buildings and an approach for deriving development blocks. 
 The result allows for the computation of urban metrics to describe and further analyse urban form on various levels ([Kleiner, Reiter, Jehling (2025)](https://doi.org/10.5194/agile-giss-6-31-2025)).
 The repository includes approaches to perform a random forest building type classification, 
