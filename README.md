@@ -1,7 +1,7 @@
 
 # Urban form model for cross-border data harmonisation and regional analysis
 
-The approach for an urban form model described here delivers the basis for the analysis of anticipated outcomes of land policies in Kleiner and Jehling ([2026](https://doi.org/10.1177/239980832614547)).
+The approach for an urban form model described here delivers the basis for the analysis of anticipated outcomes of land policies in Kleiner and Jehling ([2026](https://doi.org/10.1177/23998083261454751)).
 Comparing urban form quantitatively is highly valuable for understanding its structures and dynamics. However, making buildings, streets, plots and blocks readable 
 across countries is challenging due to extensive preprocessing and harmonisation efforts. 
 This repository provides a preprocessing workflow to harmonise administrative data from different countries for modelling urban form, using the examples of France and Germany. 
