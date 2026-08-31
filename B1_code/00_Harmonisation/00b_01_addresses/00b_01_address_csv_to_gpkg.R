@@ -57,7 +57,7 @@ csv_to_gpkg_fr <- function(dep) {
   message(dep, " ", Sys.time())
   adr_path <- file.path(indir_fr, paste0("adresses-", dep, ".csv"), paste0("adresses-", dep, ".csv"))
   
-  df <- read_csv2(adr_path, locale = locale(decimal_mark = ".")) 
+  df <- read_delim(adr_path)
   
   gdf <- st_as_sf(df, coords = c("x", "y"), crs = 2154) %>%
     rename(number = numero, street = nom_voie, AGS_INSEE = code_insee) %>%
@@ -65,7 +65,7 @@ csv_to_gpkg_fr <- function(dep) {
     st_transform(pcrs)
   
   outpath <- file.path(outdir, "00b_01a_csv_to_gpkg", paste0("fr", dep, ".gpkg"))
-  st_write(gdf, outpath, delete_dsn = TRUE, quiet = TRUE)
+  st_write(gdf, outpath, delete_dsn = TRUE, quiet = TRUE, append = FALSE)
   outpath
 }
 
