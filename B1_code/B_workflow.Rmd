@@ -20,7 +20,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(jsonlite)
 library(qgisprocess)
 library(xml2)
-library(reticulate) # for arcpy
 library(glue)
 library(fs)
 library(stringr)
@@ -54,6 +53,8 @@ child_env$commit_sha <- system("git rev-parse HEAD", intern = TRUE)  # get SHA o
 child_env$date <- format(Sys.Date(), "%Y%m%d")
 child_env$CRS <- 32632  # project crs: integer from valid EPSG code
 
+child_env$python_env = "conda" # "conda" (recommended) or "venv"
+
 # include defined variables in global environment as well
 list2env(as.list(child_env), envir = .GlobalEnv)  
 
@@ -62,23 +63,6 @@ knitdir <- dir_create(file.path(scriptdir, 'B0_R_knit'))  # -> added to gitignor
 knitr::opts_knit$set(output.dir = knitdir)  
 
 ```
-
-
-## Arcpy setup
-
-(for loading data from gdbs and running the building metrics toolbox)
-
-```{r arcpy-setup}
-# Point reticulate to the correct ArcGIS Pro Python
-use_python("C:/Program Files/ArcGIS/Pro/bin/Python/envs/arcgispro-py3/python.exe", required = TRUE)
-
-# Attach arcpy inside child_env
-child_env$arcpy <- import("arcpy", delay_load = TRUE)
-```
->> When getting an error, go into Tools > Global Options > Python > Uncheck box "Automatically activate ..." 
->> R will restart > run imports and path definitions again
-
->> For RuntimeError: The Product License has not been initialized., open ArcGIS Pro and log in.
 
 
 ## QGIS Process Setup
@@ -430,19 +414,14 @@ write_sha()
 ```
 
 ### 03.1 Building Metrics
-
-#### 03.1a Data to GeoDatabase
-
-- Takes harmonised data sets needed for building metric calculation and saves them into a GDB for better handling in ArcGIS Pro.
-
-```{r}  
-sys.source(spath("03_01a_x5_data_to_gdb.R"), envir=child_env)
-```
-
+ 
 #### 03.1b Run Toolbox
 
-- Building metrics calculation using ArcGIS Pro toolbox.
-- Takes a long time.
+(- Step 03.1a outdated but naming 03.1b kept for consistency)
+- Building metrics calculation using python urban metrics toolbox.
+- Takes ~4 hours
+- specify if you want to use conda or virtualenv for python installation in path & parameter configurations (cell 3)(conda recommended)
+
 
 ```{r}
 sys.source(spath("03_01b_run_toolbox.R"), envir=child_env)

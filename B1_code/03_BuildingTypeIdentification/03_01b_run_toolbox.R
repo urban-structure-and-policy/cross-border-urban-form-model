@@ -1,102 +1,134 @@
-# >> Run script in an environment that has arcpy loaded
-
+library(reticulate)
+library(dplyr)
 library(lubridate)
 
-# allow overwriting
-arcpy$env$overwriteOutput <- TRUE
 
-# Start timer
-totalstart <- now()
+## reticulate setup
 
-# Define paths
-worksp <- file.path(procdata, subdir, "03_01b_metrics_workspace.gdb")
-toolb <- file.path(scriptdir, subdir,"03_01_toolbox", "PE_toolbox_beta_ffp.atbx")
-x5data <- file.path(procdata, subdir, "03_01a_x5_data")
-
-# Import Toolbox
-arcpy$ImportToolbox(toolb)
-
-# Create workspace gdb if not exists
-if (!arcpy$Exists(worksp)) {
-  cat("Creating workspace gdb...", format(now(), "%H:%M:%S"), "\n")
-  dir_path <- dirname(worksp)
-  gdb_name <- basename(worksp)
-  arcpy$management$CreateFileGDB(out_folder_path = dir_path, out_name = gdb_name)
+# activate or create environment based on selection
+if (python_env == "venv"){
+  venv_path <- file.path(child_env$subdir, "venv") 
+  
+  if (!dir.exists(venv_path)) {
+    message("Creating virtual environment at: ", venv_path)
+    system(paste("python", "-m venv", venv_path))
+  } else {
+    message("Using virtual environment at: ", venv_path)
+  }
+  
+  if (Sys.info()[["sysname"]] == "Windows") {
+    py_exe <- file.path(venv_path, "Scripts", "python.exe")
+  } else {
+    py_exe <- file.path(venv_path, "bin", "python")
+  }
+} else if (python_env == "conda"){
+  conda_env = "urbanmetrics"
+  
+  conda_list <- conda_list()
+  if (conda_env %in% conda_list$name) {
+    py_exe <- conda_list$python[conda_list$name == conda_env]
+    cat("Using existing conda environment: ", conda_env)
+  } else {
+    cat("Creating new conda environment: ", conda_env)
+    conda_create(envname = conda_env, conda = conda_exe)
+    conda_list <- conda_list(conda = conda_exe)  # refresh list
+    py_exe <- conda_list$python[conda_list$name == conda_env]
+  }
+} else {
+  message("Please specify 'conda' or 'venv' for python environment.")
 }
-cat(arcpy$GetMessages(), "\n")
 
-# Step 1: Import toolbox and run LoD preparation
-## 11:30 hours
-cat("Step 1...", format(now(), "%H:%M:%S"), "\n")
-arcpy$PEworkflowbeta$lodpreparation(
-  workspace = worksp,
-  fc_parts = file.path(resultdata, "00_Harmonisation", "00b_02_buildings", "00b_02_parts.gdb/parts"),
-  fc_footprints = file.path(resultdata, "00_Harmonisation", "00b_02_buildings", "00b_02_buildings.gdb/buildings"),
-  f_dissolve = "building_id",
-  f_function = "function",
-  f_volume = "volume",
-  f_height = "height",
-  f_selector = "volume",
-  t_residential = file.path(procdata, subdir, "03_01b_list_residential.csv"),
-  fc_out = file.path(worksp, "x1_buildings")
+# tell reticulate to use this python 
+use_python(py_exe, required = TRUE)
+
+# Install packages if missing
+missing_pkgs <- setdiff(
+  c("geopandas", "momepy", "shapely", "numpy", "pandas", "tobler"),
+  py_list_packages()$package
 )
-cat(arcpy$GetMessages(), "\n")
+if (length(missing_pkgs) > 0) {
+  message("Installing missing Python packages: ", paste(missing_pkgs, collapse = ", "))
+  py_install(packages = missing_pkgs)
+} else {
+  message("All Python packages are already installed.")
+}
 
-# Step 3: Basic geometric features
-## 4:45 hours
-cat("Step 3...", format(now(), "%H:%M:%S"), "\n"); flush.console()
-arcpy$PEworkflowbeta$basicgeometricfeatures(
-  workspace = worksp,
-  fc_in = file.path(worksp, "x1_buildings"),
-  f_area = "area",
-  f_cir = "perimeter",
-  f_height = "HEIGHT_IMPUTED",
-  f_volume = "VOLUME_IMPUTED",
-  f_wallarea = NULL,
-  f_roofarea = NULL,
-  fc_out = file.path(worksp, "x3_buildings")
+## Running toolbox
+
+# Pass configuration dictionaries as nested lists 
+paths <- list(
+  input = list(
+    footprints = file.path(resultdata, '00_Harmonisation/00b_02_buildings/00b_02_buildings.gpkg'),
+    municipalities = file.path(resultdata, '00_Harmonisation/00a_municipalities/00a_municipalities.gpkg'),
+    blocks = file.path(resultdata, '02c_DevelopmentBlockIdentification/02c_03_DevelopmentBlocks.gpkg'),
+    parcels = file.path(resultdata, '00_Harmonisation/00c_parcels/00c_parcels.gpkg'),
+    addresses = file.path(resultdata, '00_Harmonisation/00b_01_addresses/00b_01_addresses.gpkg'),
+    residential_lookup = file.path(procdata, child_env$subdir, '03_01b_list_residential.csv'),
+    parts = file.path(resultdata, '00_Harmonisation/00b_02_buildings/00b_02_parts.gpkg')
+  ),
+  process = list(
+    nghb_matrix_base = file.path(procdata, child_env$subdir, '03_01b_nghb_matrix')
+  ),
+  output = list(
+    result = file.path(procdata, child_env$subdir, '03_01b_buildingmetrics.gpkg')
+  )
 )
-cat(arcpy$GetMessages(), "\n")
 
-# Step 4: Neighbour features
-## 4:40 hours
-cat("Step 4...", format(now(), "%H:%M:%S"), "\n"); flush.console()
-arcpy$PEworkflowbeta$neighbourfeatures(
-  workspace = worksp,
-  fc_in = file.path(worksp, "x3_buildings"),
-  radius = "50",
-  fc_out = file.path(worksp, "x4_buildings")
+renamefeatures <- list(
+  FNC = 'function',
+  PART_ID = 'part_id',
+  BLOCK_ID = 'block_id',
+  PRCL_ID = 'parcel_id',
+  MUN_CODE = 'AGS_INSEE',
+  STATE = 'region',
+  COUNTRY = 'country'
 )
-cat(arcpy$GetMessages(), "\n")
 
-# Step 5: Parcel analysis
-cat("Step 5...", format(now(), "%H:%M:%S"), "\n"); flush.console()
-arcpy$PEworkflowbeta$parcelanalysis(
-  workspace = worksp,
-  fc_in = file.path(worksp, "x4_buildings"),
-  f_id = "building_id",
-  fc_addresses = file.path(x5data, "addresses.gdb/addresses"),
-  fc_blocks = file.path(x5data, "blocks.gdb/blocks"),
-  f_block_id = "block_id",
-  fc_parcels = file.path(x5data, "parcels.gdb/parcels"),
-  f_parcel_id = "parcel_id",
-  fc_out = file.path(worksp, "x5_buildings")
+config <- list(
+  crs = 'EPSG:32632',
+  nghb_r = 50,
+  join_method = 'largest_overlap',
+  skip_unspecified = TRUE,
+  skip_unavailable = TRUE,
+  check_overlaps = FALSE,
+  footprints = list(
+    height_col = 'height',
+    function_col = 'function',
+    id_col = 'building_id'
+  ),
+  municipalities = list(
+    mun_col = 'key',
+    state_col = 'region',
+    country_col = 'country'
+  ),
+  blocks = list(
+    id_col = 'block_id'
+  ),
+  parcels = list(
+    id_col = 'parcel_id'
+  ),
+  parts = list(
+    id_col = 'part_id',
+    parent_id_col = 'building_id'
+  )
 )
-cat(arcpy$GetMessages(), "\n")
 
-# Final export
-cat("Export metrics as csv to result data...", format(now(), "%H:%M:%S"), "\n")
-fmap <- 'fid "fid" true true false 8 Double 0 0,First,#,x5_buildings,fid,-1,-1;function "function" true true false 65536 Text 0 0,First,#,x5_buildings,function,0,65535;country "country" true true false 2 Text 0 0,First,#,x5_buildings,country,0,1;region "region" true true false 4 Text 0 0,First,#,x5_buildings,region,0,3;perimeter "perimeter" true true false 8 Double 0 0,First,#,x5_buildings,perimeter,-1,-1;area "area" true true false 8 Double 0 0,First,#,x5_buildings,area,-1,-1;height "height" true true false 8 Double 0 0,First,#,x5_buildings,height,-1,-1;volume "volume" true true false 8 Double 0 0,First,#,x5_buildings,volume,-1,-1;part_id "part_id" true true false 50 Text 0 0,First,#,x5_buildings,part_id,0,49;building_id "building_id" true true false 4 Long 0 0,First,#,x5_buildings,building_id,-1,-1;parcel_id "parcel_id" true true false 65536 Text 0 0,First,#,x5_buildings,parcel_id,0,65535;block_id "block_id" true true false 4 Long 0 0,First,#,x5_buildings,block_id,-1,-1;AGS_INSEE "AGS_INSEE" true true false 65536 Text 0 0,First,#,x5_buildings,AGS_INSEE,0,65535;street "street" true true false 65536 Text 0 0,First,#,x5_buildings,street,0,65535;number "number" true true false 8 Double 0 0,First,#,x5_buildings,number,-1,-1;CNT_PRTS "CNT_PRTS" true true false 4 Long 0 0,First,#,x5_buildings,CNT_PRTS,-1,-1;FNC_CODE "FNC_CODE" true true false 4 Long 0 0,First,#,x5_buildings,FNC_CODE,-1,-1;IS_RES "IS_RES" true true false 4 Long 0 0,First,#,x5_buildings,IS_RES,-1,-1;A "A" true true false 4 Float 0 0,First,#,x5_buildings,A,-1,-1;C "C" true true false 4 Float 0 0,First,#,x5_buildings,C,-1,-1;H "H" true true false 4 Float 0 0,First,#,x5_buildings,H,-1,-1;V "V" true true false 4 Float 0 0,First,#,x5_buildings,V,-1,-1;SHPX_2D "SHPX_2D" true true false 4 Float 0 0,First,#,x5_buildings,SHPX_2D,-1,-1;RATIO_C_A "RATIO_C_A" true true false 4 Float 0 0,First,#,x5_buildings,RATIO_C_A,-1,-1;RATIO_MBR_A "RATIO_MBR_A" true true false 4 Float 0 0,First,#,x5_buildings,RATIO_MBR_A,-1,-1;CNT_NDS "CNT_NDS" true true false 2 Short 0 0,First,#,x5_buildings,CNT_NDS,-1,-1;DIST_NGHB_D "DIST_NGHB_D" true true false 8 Double 0 0,First,#,x5_buildings,DIST_NGHB_D,-1,-1;CNT_NGHB_D "CNT_NGHB_D" true true false 4 Long 0 0,First,#,x5_buildings,CNT_NGHB_D,-1,-1;RATIO_SW "RATIO_SW" true true false 4 Float 0 0,First,#,x5_buildings,RATIO_SW,-1,-1;CNT_NGHB_R50 "CNT_NGHB_R50" true true false 4 Long 0 0,First,#,x5_buildings,CNT_NGHB_R50,-1,-1;DIST_NGHB_R50 "DIST_NGHB_R50" true true false 8 Double 0 0,First,#,x5_buildings,DIST_NGHB_R50,-1,-1;CNT_ADD "CNT_ADD" true true false 8 Double 0 0,First,#,x5_buildings,CNT_ADD,-1,-1;BLCK_A "BLCK_A" true true false 4 Float 0 0,First,#,x5_buildings,BLCK_A,-1,-1;PRCL_A "PRCL_A" true true false 4 Float 0 0,First,#,x5_buildings,PRCL_A,-1,-1;RATIO_A_PRCL "RATIO_A_PRCL" true true false 4 Float 0 0,First,#,x5_buildings,RATIO_A_PRCL,-1,-1'
-arcpy$conversion$ExportTable(
-  in_table = file.path(worksp, "x5_buildings"),
-  out_table = file.path(resultdata, subdir, "03_01b_buildings_metrics.csv"),
-  where_clause = "",
-  use_field_alias_as_name = "NOT_USE_ALIAS",
-  field_mapping = fmap,
-  sort_field = NULL
+source_python(file.path(scriptdir, child_env$subdir, "03_01a_urban_metrics_toolbox.py"), envir = globalenv(), convert = TRUE)
+
+feature_class <- Features_on_building_level(
+  paths = paths,
+  config = config,
+  renamefeatures = renamefeatures
 )
-cat(arcpy$GetMessages(), "\n")
 
-rm(list = c("worksp", "toolb", "x5data"), envir = child_env)
+featureset <- feature_class$calculate(tags=list("FFP")) %>% 
+  select(-geometry) # geometry column does not translate well to R data.frame but write_features from class works fine for geometries
 
-cat("Finished at", format(now(), "%H:%M:%S"))
+
+message("Export metrics as csv to result data...", format(now(), "%H:%M:%S"))
+out_csv = file.path(resultdata, child_env$subdir, '03_01b_buildings_metrics.csv')
+write.csv(featureset_no_geom, out_csv, row.names = FALSE)
+
+rm(list = c("Features_on_building_level", "feature_class", "featureset", "out_csv", "config", "paths", "renamefeatures", "missing_pkgs"))
+
+message("Finished at ", format(now(), "%H:%M:%S"))
