@@ -8,7 +8,7 @@ This repository provides a preprocessing workflow to harmonise administrative da
 It includes preprocessing steps for municipalities, parcels, streets, addresses, buildings and an approach for deriving development blocks. 
 The result allows for the computation of urban metrics to describe and further analyse urban form on various levels ([Kleiner, Reiter, Jehling (2025)](https://doi.org/10.5194/agile-giss-6-31-2025)).
 The repository includes approaches to perform a random forest building type classification, 
-to determine the dominant building age for the development blocks and integrates an existing accessibility analysis approach to use on overlapping urban regions.
+an approach to determine the dominant building age for the development blocks and integrates an existing accessibility analysis approach to use on overlapping urban regions.
 These further processing steps to include in the urban form model build upon the preprocessing steps but not on each other and can therefore be run independently from each other.
 
 ## Workflow
@@ -43,7 +43,7 @@ Intermediate outputs are geographic datasets of the selected communities (01) an
 that will also be used in further analysis.
 
 ### Urban form model
-The further steps each output a copy of the development block dataset containing an additional information value as part of the urban form model.
+The further steps output a copy of the development block dataset each containing additional information value as part of the urban form model.
 Information included is:
 * Administrative, building and parcel affiliations (preprocessing)
 * dominant building type (03)
