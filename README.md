@@ -67,22 +67,24 @@ More information on input data is provided in [data_input.md](data_input.md).
 
 ### Prerequisites
 
-The workflow uses [R](https://www.r-project.org/) and [Python](https://www.python.org/) from a [QGIS](https://qgis.org/) and an [ArcGIS Pro](https://www.esri.com/en-us/arcgis/products/arcgis-pro/resources) install.
+The workflow uses [R](https://www.r-project.org/) and [Python](https://www.python.org/) as well as Python from a [QGIS](https://qgis.org/) install.
 Further, an API and a local instance of [OpenRouteService](https://openrouteservice.org/) is needed.
 Details on the software used can be found in [software_used.md](software_used.md).
 
 Before running: 
 * ORS:
   * Set up your own OpenRouteService instance. See details here: https://giscience.github.io/openrouteservice/run-instance/
-  * Install ORSTools QGIS Plugin: https://github.com/GIScience/orstools-qgis-plugin in [B_workflow.Rmd](B1_code/B_workflow.Rmd) ##01a
-  * Set your local instance as provider for the plugin
+  * Install ORSTools QGIS Plugin: https://github.com/GIScience/orstools-qgis-plugin 
+  * Set your local instance as provider for the plugin in [B_workflow.Rmd](B1_code/B_workflow.Rmd) ##01a
 * QuickOSM:
   * Install QuickOSM QGIS Plugin: https://quickosm.github.io/QuickOSM/
+* Conda:
+  * Step 03_01
 
 ### Description of the code
 
-The file [B_workflow.Rmd](B1_code/B_workflow.Rmd) gives an overview on the processing steps and describes them in detail.
-All processing steps can be run directly form the workflow script.
+The file [B_workflow.Rmd](B1_code/B_workflow.Rmd) gives an overview on the processing steps and describes them in detail. For some processing steps, minimal configurations need to be specified. They are located at the respective location in the workflow where the child script is called. 
+Almost all processing steps can be run directly form the workflow script. Only steps 05a.01 and 05a.02 need to be run from the QGIS Python console.
 
 The directory structure is expected to be like this:
 

@@ -180,6 +180,7 @@ write_sha()
 # due to changes in the road network, this does not always reproduce the same isochrones -> change the name of the version you want to keep manually and specify it in the next chunk to keep using it
 
 child_env$ors_url <- "http://url/ors"
+
 sys.source(spath("01a_Isochrones.R"), envir=child_env)
 ```
 
@@ -418,12 +419,15 @@ write_sha()
 #### 03.1b Run Toolbox
 
 (- Step 03.1a outdated but naming 03.1b kept for consistency)
-- Building metrics calculation using python urban metrics toolbox.
+- Building metrics calculation using python urban metrics toolbox (R script calls python script via reticulate).
 - Takes ~4 hours
-- specify if you want to use conda or virtualenv for python installation in path & parameter configurations (cell 3)(conda recommended)
+- specify if you want to use conda or virtualenv for python installation (conda recommended)
 
 
 ```{r}
+# set environment management system
+child_env$python_env = "conda"  #"conda" or "venv"
+
 sys.source(spath("03_01b_run_toolbox.R"), envir=child_env)
 ```
 
