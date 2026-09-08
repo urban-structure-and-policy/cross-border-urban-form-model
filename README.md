@@ -1,15 +1,15 @@
 
 # Urban form model for cross-border data harmonisation and regional analysis
 
-The approach for an urban form model described here delivers the basis for the analysis of anticipated outcomes of land policies in Kleiner and Jehling ([2026](https://doi.org/10.1177/23998083261454751)).
+The approach for an urban form model described here delivers the basis for the analysis of anticipated outcomes of land policies in urban form ([Kleiner & Jehling (2026)](https://doi.org/10.1177/23998083261454751)).
 Comparing urban form quantitatively is highly valuable for understanding its structures and dynamics. However, making buildings, streets, plots and blocks readable 
 across countries is challenging due to extensive preprocessing and harmonisation efforts. 
-This repository provides a preprocessing workflow to harmonise administrative data from different countries for modelling urban form, using the examples of France and Germany. 
+This repository provides a preprocessing workflow to harmonise administrative data from different countries for modelling urban form, using the example of France and Germany. 
 It includes preprocessing steps for municipalities, parcels, streets, addresses, buildings and an approach for deriving development blocks. 
 The result allows for the computation of urban metrics to describe and further analyse urban form on various levels ([Kleiner, Reiter, Jehling (2025)](https://doi.org/10.5194/agile-giss-6-31-2025)).
 The repository includes approaches to perform a random forest building type classification, 
-an approach to determine the dominant building age for the development blocks and integrates an existing accessibility analysis approach to use on overlapping urban regions.
-These further processing steps to include in the urban form model build upon the preprocessing steps but not on each other and can therefore be run independently from each other.
+an approach to determine the dominant building age for the development blocks and integrates an existing accessibility analysis approach ([Jehling, Kluwe, Kleiner (2026)](https://doi.org/10.5194/agile-giss-7-27-2026)) to use on overlapping urban regions.
+These further processing steps to include in the urban form model build upon the preprocessing steps, but do not rely on each other and can therefore be run independently.
 
 ## Workflow
 
@@ -36,7 +36,7 @@ Step 05 uses a Closeness-Centrality approach from [Jehling & Kluwe (2026)](https
 
 ### Preprocessing
 The main output of the preprocessing (00-02) is a geographic data set of developments blocks in the defined communities.
-Development blocks are a spatial aggregation unit of buildings that were developed together.
+Development blocks are a spatial aggregation unit of buildings that were likely developed together.
 In the creation and analysis of the urban form model they will be used as an additional analytical level.
 
 Intermediate outputs are geographic datasets of the selected communities (01) and of the harmonised datasets (00)
