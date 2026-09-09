@@ -1,5 +1,5 @@
 
-# Urban form model for cross-border data harmonisation and regional analysis
+# Cross-Border Urban Form Model for Data Harmonisation and Regional Analysis 
 
 The approach for an urban form model described here delivers the basis for the analysis of anticipated outcomes of land policies in urban form ([Kleiner & Jehling (2026)](https://doi.org/10.1177/23998083261454751)).
 Comparing urban form quantitatively is highly valuable for understanding its structures and dynamics. However, making buildings, streets, plots and blocks readable 
