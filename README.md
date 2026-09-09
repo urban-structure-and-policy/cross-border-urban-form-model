@@ -112,5 +112,6 @@ Within each directory of resultdata, procdata and code, the code expects or crea
         03_BuildingTypeIdentification/
         04_BlockAge_GHSAGE/
         05a_AccessibilityAnalysis
-        
-        
+
+## License and Suggested Citation
+Please refer to [LICENSE.md](LICENSE.md) for the usage permissions and terms under [CC-BY-SA-4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.en) as well as a suggested citation.
